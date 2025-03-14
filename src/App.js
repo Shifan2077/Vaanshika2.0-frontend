@@ -29,6 +29,8 @@ import { ChatProvider } from './contexts/ChatContext';
 // Styles
 import './App.css';
 import './styles/index.css'; // Import our custom styles
+import './styles/chatStyles.css'; // Import chat styles
+import './styles/familyTreeStyles.css'; // Import family tree styles
 
 function App() {
   return (

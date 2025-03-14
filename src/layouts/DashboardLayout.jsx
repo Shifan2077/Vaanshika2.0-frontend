@@ -166,13 +166,10 @@ const DashboardLayout = () => {
         </AnimatePresence>
         
         {/* Main content */}
-        <main className={`flex-1 flex flex-col h-screen overflow-hidden transition-all duration-300 ${
-          isSidebarOpen && !isMobile ? 'ml-64' : ''
-        }`}>
+        <main className={`flex-1 flex flex-col h-screen overflow-hidden transition-all duration-300 `}>
           {/* Header */}
           <header className="sticky top-0 z-10 glass-effect-strong shadow-sm p-4">
             <div className="container mx-auto flex items-center justify-between">
-              {/* Mobile menu button */}
               {isMobile && (
                 <button 
                   className="p-2 rounded-md hover:bg-white hover:bg-opacity-20 transition-colors"
@@ -212,16 +209,16 @@ const DashboardLayout = () => {
           </header>
           
           {/* Page content */}
-          <div className="flex-1 overflow-y-auto p-4 md:p-6">
-            <div className="container mx-auto">
+          <div className="flex-1 overflow-y-auto h-[100%] p-4 md:p-6">
+            <div className="container h-[100%]">
               <Outlet />
             </div>
           </div>
           
           {/* Footer */}
-          <footer className="glass-effect-light p-4 text-center text-sm text-gray-600 dark:text-gray-400">
+          {/* <footer className="glass-effect-light p-4 text-center text-sm text-gray-600 dark:text-gray-400">
             <p>&copy; {new Date().getFullYear()} Vaanshika. All rights reserved.</p>
-          </footer>
+          </footer> */}
         </main>
       </div>
     </div>

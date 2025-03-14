@@ -1,14 +1,15 @@
 // File: src/components/family/FamilyTreeVisualization.jsx
 // Family tree visualization component using React D3 Tree
 
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import Tree from 'react-d3-tree';
 import PropTypes from 'prop-types';
 import { useFamily } from '../../hooks/useFamily';
 import { motion, AnimatePresence } from 'framer-motion';
+import { familyTreeData } from '../../utils/demoData';
 
 // Custom node component for the tree
-const CustomNode = ({ nodeDatum, onNodeClick, onAddChild, onEditNode, onDeleteNode }) => {
+const CustomNode = React.memo(({ nodeDatum, onNodeClick, onAddChild, onEditNode, onDeleteNode }) => {
   const [menuOpen, setMenuOpen] = useState(false);
   
   // Determine node color based on gender or generation
@@ -40,41 +41,43 @@ const CustomNode = ({ nodeDatum, onNodeClick, onAddChild, onEditNode, onDeleteNo
           {nodeDatum.attributes?.imageUrl ? (
             <div className="w-14 h-14 rounded-full overflow-hidden mx-auto mb-2 border-2 border-white shadow-md">
               <img 
-                src={nodeDatum.attributes.imageUrl} 
-                alt={nodeDatum.name} 
+                          src={nodeDatum?.attributes?.imageUrl} 
+                alt={nodeDatum?.name} 
                 className="w-full h-full object-cover"
               />
             </div>
           ) : (
             <div className="w-14 h-14 rounded-full mx-auto mb-2 bg-white/30 backdrop-blur-sm flex items-center justify-center text-xl font-semibold text-gray-700 border-2 border-white/50 shadow-md">
-              {nodeDatum.name.charAt(0)}
+              {nodeDatum?.name?.charAt(0)}
             </div>
           )}
           
-          {/* Name */}
-          <div className="tree-node-name font-medium text-gray-800 dark:text-gray-100">{nodeDatum.name}</div>
-          
-          {/* Details */}
-          {nodeDatum.attributes?.birthDate && (
-            <div className="tree-node-details text-xs text-gray-600 dark:text-gray-300">
-              {new Date(nodeDatum.attributes.birthDate).getFullYear()} - 
-              {nodeDatum.attributes?.deathDate ? new Date(nodeDatum.attributes.deathDate).getFullYear() : 'Present'}
+          {/* Name and details */}
+          <div className="text-center">
+            <div className="font-semibold text-sm truncate">{nodeDatum?.name}</div>
+            <div className="text-xs text-gray-600 dark:text-gray-300">
+              {nodeDatum?.attributes?.birthDate && (
+                <span>{new Date(nodeDatum?.attributes?.birthDate).getFullYear()}</span>
+              )}
+              {nodeDatum?.attributes?.birthDate && nodeDatum?.attributes?.deathDate && (
+                <span> - </span>
+              )}
+              {nodeDatum?.attributes?.deathDate && (
+                <span>{new Date(nodeDatum?.attributes?.deathDate).getFullYear()}</span>
+              )}
             </div>
-          )}
+          </div>
           
           {/* Action buttons */}
-          <div className="flex justify-center mt-2 space-x-1">
-            <button
-              type="button"
+          <div className="absolute top-0 right-0 mt-1 mr-1">
+            <button 
+              className="w-6 h-6 rounded-full bg-white/70 hover:bg-white flex items-center justify-center text-gray-600 hover:text-gray-900 shadow-sm"
               onClick={(e) => {
                 e.stopPropagation();
-                setMenuOpen(!menuOpen);
-              }}
-              className="p-1.5 bg-white/30 backdrop-blur-sm rounded-full shadow-sm text-gray-700 hover:bg-white/50 hover:text-primary-600 focus:outline-none focus:ring-2 focus:ring-primary-500 transition-all duration-200"
-              aria-label="More options"
+                setMenuOpen((prev) => !prev);              }}
             >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h.01M12 12h.01M19 12h.01M6 12a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0z" />
               </svg>
             </button>
             
@@ -82,62 +85,48 @@ const CustomNode = ({ nodeDatum, onNodeClick, onAddChild, onEditNode, onDeleteNo
             <AnimatePresence>
               {menuOpen && (
                 <motion.div 
-                  className="absolute z-10 mt-8 -ml-24 w-36 card-glass shadow-glass py-1 rounded-lg"
+                  className="absolute top-8 right-0 w-32 bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden z-10"
                   initial={{ opacity: 0, y: -10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
                   transition={{ duration: 0.2 }}
                 >
-                  <button
-                    className="flex items-center w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-white/30 transition-colors"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onNodeClick(nodeDatum);
-                      setMenuOpen(false);
-                    }}
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                      <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
-                      <path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd" />
-                    </svg>
-                    View Details
-                  </button>
-                  <button
-                    className="flex items-center w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-white/30 transition-colors"
+                  <button 
+                    className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center"
                     onClick={(e) => {
                       e.stopPropagation();
                       onAddChild(nodeDatum);
                       setMenuOpen(false);
                     }}
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clipRule="evenodd" />
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                     </svg>
                     Add Child
                   </button>
-                  <button
-                    className="flex items-center w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-white/30 transition-colors"
+                  <button 
+                    className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center"
                     onClick={(e) => {
                       e.stopPropagation();
                       onEditNode(nodeDatum);
                       setMenuOpen(false);
                     }}
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                      <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                     </svg>
                     Edit
                   </button>
-                  <button
-                    className="flex items-center w-full text-left px-4 py-2 text-sm text-error-600 hover:bg-white/30 transition-colors"
+                  <button 
+                    className="w-full text-left px-3 py-2 text-sm text-error-600 hover:bg-error-50 dark:hover:bg-error-900/30 flex items-center"
                     onClick={(e) => {
                       e.stopPropagation();
                       onDeleteNode(nodeDatum);
                       setMenuOpen(false);
                     }}
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                     </svg>
                     Delete
                   </button>
@@ -149,193 +138,223 @@ const CustomNode = ({ nodeDatum, onNodeClick, onAddChild, onEditNode, onDeleteNo
       </foreignObject>
     </g>
   );
-};
+});
 
-CustomNode.propTypes = {
-  nodeDatum: PropTypes.object.isRequired,
-  onNodeClick: PropTypes.func,
-  onAddChild: PropTypes.func,
-  onEditNode: PropTypes.func,
-  onDeleteNode: PropTypes.func
-};
-
-// Main tree visualization component
-const FamilyTreeVisualization = ({ 
-  treeData, 
-  onNodeClick, 
-  onAddChild, 
-  onEditNode, 
-  onDeleteNode 
-}) => {
+const FamilyTreeVisualization = ({ onNodeClick, onAddChild, onEditNode, onDeleteNode }) => {
   const [translate, setTranslate] = useState({ x: 0, y: 0 });
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
-  const [zoom, setZoom] = useState(1);
-  const treeContainer = useRef(null);
-  const { loading } = useFamily();
-
-  // Handle window resize
+  const [treeData, setTreeData] = useState({});
+    const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [selectedNode, setSelectedNode] = useState(null);
+  const [zoomLevel, setZoomLevel] = useState(1);
+  
+  const treeContainerRef = useRef(null);
+  const { getFamilyTree } = useFamily();
+  
+  // Convert the raw family data to the format expected by react-d3-tree
+  const formatTreeData = useCallback((data) => {
+    if (!data) return null;
+    
+    // Helper function to convert a person and their descendants
+    const formatPerson = (person) => {
+      const formattedPerson = {
+        name: person.name,
+        id: person.id,
+        attributes: {
+          gender: person.gender,
+          birthDate: person.birthDate,
+          deathDate: person.deathDate,
+          imageUrl: person.photo
+        },
+        children: []
+      };
+      
+      // Add spouse if exists
+      if (person.spouse) {
+        formattedPerson.attributes.spouse = {
+          name: person.spouse.name,
+          id: person.spouse.id,
+          gender: person.spouse.gender,
+          birthDate: person.spouse.birthDate,
+          deathDate: person.spouse.deathDate,
+          imageUrl: person.spouse.photo
+        };
+      }
+      
+      // Add children recursively
+      if (person.children && person.children.length > 0) {
+        formattedPerson.children = person.children.map(child => formatPerson(child));
+      }
+      
+      return formattedPerson;
+    };
+    
+    return formatPerson(data);
+  }, []);
+  
+  // Fetch family tree data
   useEffect(() => {
-    const updateDimensions = () => {
-      if (treeContainer.current) {
-        setDimensions({
-          width: treeContainer.current.offsetWidth,
-          height: treeContainer.current.offsetHeight
-        });
+    const fetchData = async () => {
+      setIsLoading(true);
+      try {
+        // Use demo data instead of fetching from API
+        const demoTreeData = familyTreeData;
+        const formattedData = formatTreeData(demoTreeData);
+        setTreeData(formattedData);
+        setError(null);
+      } catch (err) {
+        console.error('Error fetching family tree data:', err);
+        setError('Failed to load family tree data. Please try again later.');
+      } finally {
+        setIsLoading(false);
       }
     };
-
-    updateDimensions();
-    window.addEventListener('resize', updateDimensions);
-
-    return () => {
-      window.removeEventListener('resize', updateDimensions);
-    };
-  }, []);
-
-  // Center the tree when data or dimensions change
+    
+    fetchData();
+  }, [formatTreeData]);
+  
+  // Update dimensions when the container is resized
   useEffect(() => {
-    if (dimensions.width > 0 && dimensions.height > 0) {
-      setTranslate({
-        x: dimensions.width / 2,
-        y: dimensions.height / 5
+    if (treeContainerRef.current) {
+      const resizeObserver = new ResizeObserver(entries => {
+        for (let entry of entries) {
+          const { width, height } = entry.contentRect;
+          setDimensions({ width, height });
+          setTranslate({ x: width / 2, y: height / 5 });
+        }
       });
+      
+      resizeObserver.observe(treeContainerRef.current);
+      
+      return () => {
+        if (treeContainerRef.current) {
+          resizeObserver.unobserve(treeContainerRef.current);
+        }
+      };
     }
-  }, [dimensions, treeData]);
-
-  // Custom path generator for connecting the nodes
-  const straightPathFunc = useCallback((linkDatum, orientation) => {
-    const { source, target } = linkDatum;
-    return orientation === 'horizontal'
-      ? `M${source.y},${source.x}L${target.y},${target.x}`
-      : `M${source.x},${source.y}L${target.x},${target.y}`;
   }, []);
-
-  // Zoom handlers
-  const handleZoomIn = () => {
-    setZoom(prevZoom => Math.min(prevZoom + 0.1, 2));
-  };
-
-  const handleZoomOut = () => {
-    setZoom(prevZoom => Math.max(prevZoom - 0.1, 0.5));
-  };
-
-  const handleResetZoom = () => {
-    setZoom(1);
-    if (dimensions.width > 0 && dimensions.height > 0) {
-      setTranslate({
-        x: dimensions.width / 2,
-        y: dimensions.height / 5
-      });
+  
+  // Handle node click
+  const handleNodeClick = (nodeDatum) => {
+    setSelectedNode(nodeDatum);
+    if (onNodeClick) {
+      onNodeClick(nodeDatum);
     }
   };
-
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center h-full">
-        <div className="loader">
-          <div className="spinner"></div>
-          <p className="mt-4 text-primary-600">Loading family tree...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!treeData) {
-    return (
-      <motion.div 
-        className="flex flex-col justify-center items-center h-full p-8 text-center"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.5 }}
-      >
-        <div className="text-6xl mb-6">🌱</div>
-        <h3 className="text-2xl font-medium text-gray-800 dark:text-gray-200 mb-4">No Family Tree Yet</h3>
-        <p className="text-gray-600 dark:text-gray-400 mb-8 max-w-md">
-          Start building your family tree by adding your first family member. Create a legacy that can be shared with generations to come.
-        </p>
-        <motion.button 
-          className="btn-primary-glass px-6 py-3 rounded-lg text-lg"
-          onClick={() => onAddChild({ name: 'Root', children: [] })}
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-        >
-          Create Family Tree
-        </motion.button>
-      </motion.div>
-    );
-  }
-
+  
+  // Zoom controls
+  const handleZoomIn = () => {
+    setZoomLevel(prev => Math.min(prev + 0.1, 2));
+  };
+  
+  const handleZoomOut = () => {
+    setZoomLevel(prev => Math.max(prev - 0.1, 0.5));
+  };
+  
+  const handleResetZoom = () => {
+    setZoomLevel(1);
+    if (treeContainerRef.current) {
+      const { width, height } = treeContainerRef.current.getBoundingClientRect();
+      setTranslate({ x: width / 2, y: height / 5 });
+    }
+  };
+  
+  // Custom path component for connecting nodes
+  const straightPathFunc = ({ source, target }) => {
+    return `M${source.x},${source.y}L${target.x},${target.y}`;
+  };
+  
+  // if (isLoading) {
+  //   return (
+  //     <div className="flex items-center justify-center h-full">
+  //       <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary-500"></div>
+  //     </div>
+  //   );
+  // }
+  
+  // if (error) {
+  //   return (
+  //     <div className="flex flex-col items-center justify-center h-full text-center p-4">
+  //       <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-error-500 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+  //         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+  //       </svg>
+  //       <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-2">Error Loading Family Tree</h3>
+  //       <p className="text-gray-600 dark:text-gray-400 mb-4">{error}</p>
+  //       <button 
+  //         className="btn-primary px-4 py-2 rounded-lg"
+  //         onClick={() => window.location.reload()}
+  //       >
+  //         Retry
+  //       </button>
+  //     </div>
+  //   );
+  // }
+  
   return (
-    <div className="family-tree-container h-full w-full relative" ref={treeContainer}>
-      {/* Zoom and orientation controls */}
-      <div className="absolute top-4 right-4 z-10 card-glass p-1 rounded-full shadow-glass flex space-x-1">
+    <div className="relative h-full w-full" ref={treeContainerRef}>
+      {/* Zoom controls */}
+      <div className="absolute top-4 right-4 z-10 flex flex-col space-y-2 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm p-2 rounded-lg shadow-glass">
         <button 
-          className="p-2 text-gray-700 hover:bg-white/30 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500"
+          className="w-8 h-8 rounded-lg bg-white dark:bg-gray-700 flex items-center justify-center text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600 shadow-sm"
           onClick={handleZoomIn}
           aria-label="Zoom in"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-            <path fillRule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clipRule="evenodd" />
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
           </svg>
         </button>
         <button 
-          className="p-2 text-gray-700 hover:bg-white/30 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500"
+          className="w-8 h-8 rounded-lg bg-white dark:bg-gray-700 flex items-center justify-center text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600 shadow-sm"
           onClick={handleZoomOut}
           aria-label="Zoom out"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-            <path fillRule="evenodd" d="M5 10a1 1 0 011-1h8a1 1 0 110 2H6a1 1 0 01-1-1z" clipRule="evenodd" />
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 12H6" />
           </svg>
         </button>
         <button 
-          className="p-2 text-gray-700 hover:bg-white/30 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500"
+          className="w-8 h-8 rounded-lg bg-white dark:bg-gray-700 flex items-center justify-center text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600 shadow-sm"
           onClick={handleResetZoom}
           aria-label="Reset view"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-            <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5" />
           </svg>
         </button>
       </div>
-
-      {/* Tree visualization */}
-      <div style={{ transform: `scale(${zoom})`, transformOrigin: 'center', transition: 'transform 0.3s ease' }}>
+      
+      {treeData && (
         <Tree
-          data={treeData}
-          translate={translate}
-          orientation="vertical"
-          pathFunc={straightPathFunc}
-          nodeSize={{ x: 220, y: 150 }}
-          separation={{ siblings: 1.5, nonSiblings: 2 }}
-          renderCustomNodeElement={(rd3tProps) => (
-            <CustomNode
-              {...rd3tProps}
-              onNodeClick={onNodeClick}
-              onAddChild={onAddChild}
-              onEditNode={onEditNode}
-              onDeleteNode={onDeleteNode}
-            />
-          )}
-          pathClassFunc={() => 'tree-connector'}
-        />
-      </div>
+        data={treeData}
+        translate={translate}
+        orientation="vertical"
+        pathFunc={straightPathFunc}
+        renderCustomNodeElement={(rd3tProps) => (
+          <CustomNode
+            {...rd3tProps}
+            onNodeClick={handleNodeClick}
+            onAddChild={onAddChild}
+            onEditNode={onEditNode}
+            onDeleteNode={onDeleteNode}
+          />
+        )}
+        zoom={zoomLevel}
+        separation={{ siblings: 1.5, nonSiblings: 2 }}
+        nodeSize={{ x: 200, y: 150 }}
+        enableLegacyTransitions={true}
+        transitionDuration={800}
+      />
+      )}
     </div>
   );
 };
 
-FamilyTreeVisualization.propTypes = {
-  treeData: PropTypes.object,
-  onNodeClick: PropTypes.func,
-  onAddChild: PropTypes.func,
-  onEditNode: PropTypes.func,
-  onDeleteNode: PropTypes.func
+CustomNode.propTypes = {
+  nodeDatum: PropTypes.object.isRequired,
+  onNodeClick: PropTypes.func.isRequired,
+  onAddChild: PropTypes.func.isRequired,
+  onEditNode: PropTypes.func.isRequired,
+  onDeleteNode: PropTypes.func.isRequired,
 };
-
-FamilyTreeVisualization.defaultProps = {
-  onNodeClick: () => {},
-  onAddChild: () => {},
-  onEditNode: () => {},
-  onDeleteNode: () => {}
-};
-
 export default FamilyTreeVisualization; 
