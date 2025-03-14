@@ -8,6 +8,7 @@ import moment from 'moment';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
 import { useAuth } from '../hooks/useAuth';
 import { useEvents } from '../hooks/useEvents';
+import { demoEventsData } from '../utils/demoData';
 import { 
   FaCalendarAlt, 
   FaPlus, 
@@ -48,18 +49,29 @@ const EventsPage = () => {
   const [calendarView, setCalendarView] = useState('month');
   const [currentDate, setCurrentDate] = useState(new Date());
   
-  // Load events
+  // Load events from demo data instead of API
   useEffect(() => {
     const loadEvents = async () => {
+      setIsLoading(true);
       try {
-        setIsLoading(true);
-        const eventsData = await getEvents();
-        
-        // Convert date strings to Date objects
-        const formattedEvents = eventsData.map(event => ({
-          ...event,
-          start: new Date(event.start),
-          end: new Date(event.end)
+        // Transform demo data to the format expected by react-big-calendar
+        const formattedEvents = demoEventsData.map(event => ({
+          id: event.id,
+          title: event.title,
+          description: event.description,
+          start: new Date(event.date + 'T' + event.time.start),
+          end: new Date(event.date + 'T' + event.time.end),
+          location: event.location,
+          allDay: event.allDay || false,
+          attendees: event.attendees || [],
+          color: event.type === 'birthday' ? '#FF5722' : 
+                 event.type === 'anniversary' ? '#9C27B0' : 
+                 event.type === 'family-gathering' ? '#4CAF50' : 
+                 event.type === 'religious' ? '#FFC107' : '#3174ad',
+          organizer: event.organizer,
+          photos: event.photos,
+          type: event.type,
+          recurrence: event.recurrence
         }));
         
         setEvents(formattedEvents);
@@ -71,28 +83,33 @@ const EventsPage = () => {
     };
     
     loadEvents();
-  }, [getEvents]);
+  }, []);
   
-  // Handle event selection
   const handleSelectEvent = (event) => {
     setSelectedEvent(event);
   };
   
-  // Handle slot selection (creating a new event)
   const handleSelectSlot = ({ start, end }) => {
     setEventFormData({
       ...eventFormData,
       start,
       end,
-      allDay: start.getDate() !== end.getDate()
+      title: '',
+      description: '',
+      location: '',
+      allDay: false,
+      attendees: [],
+      color: '#3174ad'
     });
     setIsEditMode(false);
     setShowEventModal(true);
   };
   
-  // Handle edit event
   const handleEditEvent = () => {
+    if (!selectedEvent) return;
+    
     setEventFormData({
+      id: selectedEvent.id,
       title: selectedEvent.title,
       description: selectedEvent.description || '',
       start: selectedEvent.start,
@@ -102,60 +119,66 @@ const EventsPage = () => {
       attendees: selectedEvent.attendees || [],
       color: selectedEvent.color || '#3174ad'
     });
+    
     setIsEditMode(true);
     setShowEventModal(true);
     setSelectedEvent(null);
   };
   
-  // Handle delete event
   const handleDeleteEvent = async () => {
     if (!selectedEvent) return;
     
-    if (window.confirm('Are you sure you want to delete this event?')) {
-      try {
-        await deleteEvent(selectedEvent.id);
-        setEvents(prevEvents => prevEvents.filter(event => event.id !== selectedEvent.id));
-        setSelectedEvent(null);
-      } catch (error) {
-        console.error('Error deleting event:', error);
-      }
+    try {
+      // In demo mode, just filter out the event from the state
+      setEvents(prevEvents => prevEvents.filter(event => event.id !== selectedEvent.id));
+      setSelectedEvent(null);
+      
+      // Show success notification
+      alert('Event deleted successfully');
+    } catch (error) {
+      console.error('Error deleting event:', error);
+      alert('Failed to delete event. Please try again.');
     }
   };
   
-  // Handle form input change
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
-    setEventFormData(prev => ({
-      ...prev,
+    setEventFormData({
+      ...eventFormData,
       [name]: type === 'checkbox' ? checked : value
-    }));
+    });
   };
   
-  // Handle date/time change
   const handleDateChange = (name, date) => {
-    setEventFormData(prev => ({
-      ...prev,
+    setEventFormData({
+      ...eventFormData,
       [name]: date
-    }));
+    });
   };
   
-  // Handle form submission
   const handleSubmitEvent = async (e) => {
     e.preventDefault();
     
     try {
       if (isEditMode) {
-        // Update existing event
-        const updatedEvent = await updateEvent(selectedEvent.id, eventFormData);
+        // Update existing event in demo mode
         setEvents(prevEvents => 
           prevEvents.map(event => 
-            event.id === updatedEvent.id ? { ...updatedEvent, start: new Date(updatedEvent.start), end: new Date(updatedEvent.end) } : event
+            event.id === eventFormData.id ? { ...eventFormData } : event
           )
         );
+        alert('Event updated successfully');
       } else {
-        // Create new event
-        const newEvent = await createEvent(eventFormData);
-        setEvents(prevEvents => [...prevEvents, { ...newEvent, start: new Date(newEvent.start), end: new Date(newEvent.end) }]);
+        // Create new event in demo mode
+        const newEvent = {
+          ...eventFormData,
+          id: `event-${Date.now()}`, // Generate a unique ID
+          createdBy: user.uid,
+          createdAt: new Date()
+        };
+        
+        setEvents(prevEvents => [...prevEvents, newEvent]);
+        alert('Event created successfully');
       }
       
       // Reset form and close modal
@@ -172,6 +195,7 @@ const EventsPage = () => {
       setShowEventModal(false);
     } catch (error) {
       console.error('Error saving event:', error);
+      alert('Failed to save event. Please try again.');
     }
   };
   
