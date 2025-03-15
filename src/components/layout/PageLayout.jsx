@@ -4,6 +4,7 @@
 import React from 'react';
 import PropTypes from 'prop-types';
 import { motion } from 'framer-motion';
+import { useLocation } from 'react-router-dom';
 import Navigation from './Navigation';
 
 const PageLayout = ({ 
@@ -15,13 +16,17 @@ const PageLayout = ({
   onBack,
   className = ''
 }) => {
+  const location = useLocation();
+  const isChatPage = location.pathname.includes('/chat');
+  
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary-50 via-white to-secondary-50">
-      <Navigation />
+    <div className=" bg-gradient-to-br from-primary-50 via-white to-secondary-50">
+      {/* Don't show Navigation for chat pages */}
+      {!isChatPage && <Navigation />}
       
-      <main className="pt-16">
-        {/* Page header */}
-        {(title || actions) && (
+      <main className={isChatPage ? "" : "pt-16"}>
+        {/* Page header - Don't show for chat pages */}
+        {!isChatPage && (title || actions) && (
           <header className="bg-white dark:bg-neutral-800 shadow-sm">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
               <div className="flex items-center justify-between">
@@ -74,12 +79,12 @@ const PageLayout = ({
           </header>
         )}
         
-        {/* Page content */}
+        {/* Page content - Special handling for chat pages */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.2 }}
-          className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 ${className}`}
+          className={`${isChatPage ? 'h-full' : 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6'} ${className}`}
         >
           {children}
         </motion.div>

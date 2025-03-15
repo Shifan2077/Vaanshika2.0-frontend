@@ -2,21 +2,26 @@
 // Context for managing authentication state
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { initializeApp } from '@firebase/app';
 import { 
   getAuth, 
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-  signOut,
-  sendPasswordResetEmail,
-  updateProfile,
   onAuthStateChanged,
   GoogleAuthProvider,
-  signInWithPopup,
-  sendEmailVerification
+  signInWithPopup
 } from '@firebase/auth';
+import { initializeApp } from '@firebase/app';
+import { 
+  registerUser, 
+  loginUser, 
+  logoutUser, 
+  resetPassword as resetPasswordService,
+  resendVerificationEmail as resendVerificationEmailService,
+  getCurrentUserProfile,
+  getToken,
+  initializeAuth,
+  loginWithGoogle as loginWithGoogleService
+} from '../services/authService';
 
-// Firebase configuration
+// Firebase configuration - keep for Google sign-in
 const firebaseConfig = {
   apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
   authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
@@ -26,7 +31,7 @@ const firebaseConfig = {
   appId: process.env.REACT_APP_FIREBASE_APP_ID
 };
 
-// Initialize Firebase
+// Initialize Firebase - keep for Google sign-in
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const googleProvider = new GoogleAuthProvider();
@@ -42,21 +47,18 @@ export function AuthProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-
-  // Sign up function with email verification
-  async function signup(email, password, displayName) {
+  const [userProfile, setUserProfile] = useState(null);
+  
+  // Register function with email verification
+  async function register(email, password, profileData) {   
     try {
       setError('');
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      
-      // Update profile with display name
-      await updateProfile(userCredential.user, { displayName });
-      
-      // Send email verification
-      await sendEmailVerification(userCredential.user);
-      
-      return userCredential.user;
+      console.log("AuthContext register - profileData:", profileData);
+      const userData = await registerUser(email, password, profileData);
+      console.log("AuthContext register - userData:", userData);
+      return userData;
     } catch (err) {
+      console.error("AuthContext register error:", err);
       setError(err.message);
       throw err;
     }
@@ -66,16 +68,10 @@ export function AuthProvider({ children }) {
   async function login(email, password) {
     try {
       setError('');
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      
-      // Check if email is verified
-      if (!userCredential.user.emailVerified) {
-        setError('Please verify your email before logging in. Check your inbox for a verification link.');
-        await signOut(auth);
-        throw new Error('Email not verified');
-      }
-      
-      return userCredential.user;
+      const userData = await loginUser(email, password);
+      setCurrentUser(userData.user);
+      setUserProfile(userData.user);
+      return userData;
     } catch (err) {
       setError(err.message);
       throw err;
@@ -83,11 +79,13 @@ export function AuthProvider({ children }) {
   }
 
   // Google sign in
-  async function signInWithGoogle() {
+  async function loginWithGoogle() {
     try {
       setError('');
-      const result = await signInWithPopup(auth, googleProvider);
-      return result.user;
+      const userData = await loginWithGoogleService();
+      setCurrentUser(userData.user);
+      setUserProfile(userData.user);
+      return userData;
     } catch (err) {
       setError(err.message);
       throw err;
@@ -98,7 +96,9 @@ export function AuthProvider({ children }) {
   async function logout() {
     try {
       setError('');
-      await signOut(auth);
+      await logoutUser();
+      setCurrentUser(null);
+      setUserProfile(null);
     } catch (err) {
       setError(err.message);
       throw err;
@@ -109,7 +109,7 @@ export function AuthProvider({ children }) {
   async function resetPassword(email) {
     try {
       setError('');
-      await sendPasswordResetEmail(auth, email);
+      await resetPasswordService(email);
     } catch (err) {
       setError(err.message);
       throw err;
@@ -117,54 +117,80 @@ export function AuthProvider({ children }) {
   }
 
   // Resend verification email
-  async function resendVerificationEmail() {
+  async function resendVerificationEmail(email) {
     try {
       setError('');
-      if (currentUser && !currentUser.emailVerified) {
-        await sendEmailVerification(currentUser);
-        return true;
-      }
-      return false;
+      const result = await resendVerificationEmailService(email);
+      return result;
     } catch (err) {
       setError(err.message);
       throw err;
     }
   }
 
-  // Update user profile
-  async function updateUserProfile(profile) {
+  // Fetch user profile from backend
+  async function fetchUserProfile() {
     try {
-      setError('');
-      if (currentUser) {
-        await updateProfile(currentUser, profile);
-        // Force refresh the user to get updated profile
-        setCurrentUser({ ...currentUser });
+      if (getToken()) {
+        const profile = await getCurrentUserProfile();
+        setUserProfile(profile);
+        setCurrentUser(profile);
+        return profile;
       }
+      return null;
     } catch (err) {
-      setError(err.message);
-      throw err;
+      console.error('Error fetching user profile:', err);
+      return null;
     }
   }
 
-  // Listen for auth state changes
+  // Initialize auth state
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setCurrentUser(user);
-      setLoading(false);
-    });
-
-    return unsubscribe;
+    // First check if we have a JWT token
+    const hasToken = initializeAuth();
+    
+    if (hasToken) {
+      // If we have a token, fetch the user profile
+      fetchUserProfile().then(() => {
+        setLoading(false);
+      }).catch(() => {
+        setLoading(false);
+      });
+    } else {
+      // If no JWT token, listen for Firebase auth state changes (for Google sign-in)
+      const unsubscribe = onAuthStateChanged(auth, (user) => {
+        if (user) {
+          // If Firebase user exists but no JWT token, we need to get a JWT token
+          // This would happen after Google sign-in
+          getCurrentUserProfile().then(profile => {
+            setUserProfile(profile);
+            setCurrentUser(profile);
+          }).catch(err => {
+            console.error('Error getting user profile after Firebase auth:', err);
+          }).finally(() => {
+            setLoading(false);
+          });
+        } else {
+          setCurrentUser(null);
+          setUserProfile(null);
+          setLoading(false);
+        }
+      });
+      
+      return unsubscribe;
+    }
   }, []);
 
   const value = {
     currentUser,
-    signup,
+    userProfile,
+    register,
     login,
     logout,
     resetPassword,
-    updateUserProfile,
-    signInWithGoogle,
+    loginWithGoogle,
     resendVerificationEmail,
+    fetchUserProfile,
     error,
     loading
   };

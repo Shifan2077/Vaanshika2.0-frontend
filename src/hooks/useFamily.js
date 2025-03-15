@@ -2,7 +2,7 @@
 // Custom hook for using the FamilyContext
 
 import { useContext } from 'react';
-import { FamilyContext } from '../context/FamilyContext';
+import FamilyContext from '../contexts/FamilyContext';
 
 export const useFamily = () => {
   const context = useContext(FamilyContext);

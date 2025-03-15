@@ -189,7 +189,7 @@ const ChatWindow = ({ chatId, onSendMessage, isLoading }) => {
   
   return (
     <div className="chat-container">
-      {/* Chat header */}
+      {/* Fixed chat header */}
       <div className="chat-header">
         <div className="chat-header-info">
           <div className="chat-avatar">
@@ -219,7 +219,7 @@ const ChatWindow = ({ chatId, onSendMessage, isLoading }) => {
         </div>
       </div>
       
-      {/* Messages container */}
+      {/* Scrollable messages container */}
       <div className="chat-messages">
         {isLoading ? (
           <div className="chat-loading">
@@ -300,7 +300,7 @@ const ChatWindow = ({ chatId, onSendMessage, isLoading }) => {
         <div ref={messagesEndRef} />
       </div>
       
-      {/* Message input */}
+      {/* Fixed input area */}
       <div className="chat-input-container">
         <form onSubmit={handleSendMessage} className="chat-input-form">
           <div className="chat-input-actions">

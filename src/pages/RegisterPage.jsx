@@ -5,10 +5,11 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useAuth } from '../hooks/useAuth';
+import { registerUser } from '../services/authService';
 
 const RegisterPage = () => {
   const navigate = useNavigate();
-  const { register, loginWithGoogle } = useAuth();
+  const { loginWithGoogle, register } = useAuth();
   
   const [formData, setFormData] = useState({
     firstName: '',
@@ -22,6 +23,7 @@ const RegisterPage = () => {
   const [errors, setErrors] = useState({});
   const [isLoading, setIsLoading] = useState(false);
   const [registerError, setRegisterError] = useState('');
+  const [verificationSent, setVerificationSent] = useState(false);
 
   // Handle input changes
   const handleChange = (e) => {
@@ -86,10 +88,18 @@ const RegisterPage = () => {
     setRegisterError('');
     
     try {
-      await register(formData.email, formData.password, {
-        displayName: `${formData.firstName} ${formData.lastName}`.trim()
-      });
-      navigate('/dashboard');
+      // Create the display name from first and last name
+      const displayName = `${formData.firstName} ${formData.lastName}`.trim();
+      console.log("displayName", displayName);
+      console.log("firstName", formData.firstName);
+      console.log("lastName", formData.lastName);
+      
+      // Use the register function from AuthContext instead of direct service call
+      let user = await register(formData.email, formData.password, { displayName });
+      console.log("user in register page", user);
+      // navigate('/dashboard');
+      // Show verification message instead of redirecting
+      setVerificationSent(true);
     } catch (error) {
       console.error('Registration error:', error);
       setRegisterError(
@@ -117,6 +127,54 @@ const RegisterPage = () => {
       setIsLoading(false);
     }
   };
+
+  // If verification email is sent, show success message
+  if (verificationSent) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-50 via-white to-secondary-50 px-4 sm:px-6 lg:px-8 py-12">
+        <div className="absolute inset-0 overflow-hidden">
+          <div className="absolute left-1/3 top-0 bg-primary-300 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob w-96 h-96"></div>
+          <div className="absolute right-1/3 top-1/4 bg-secondary-300 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-2000 w-96 h-96"></div>
+          <div className="absolute bottom-1/3 left-1/4 bg-accent-300 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-4000 w-96 h-96"></div>
+        </div>
+        
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          className="max-w-md w-full glassmorphism bg-white bg-opacity-70 backdrop-blur-lg rounded-2xl shadow-xl p-8 sm:p-10 text-center"
+        >
+          <div className="mb-6 text-success text-5xl">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-20 w-20 mx-auto text-success" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <h2 className="text-2xl font-bold text-neutral-900 mb-4">Verification Email Sent!</h2>
+          <p className="text-neutral-600 mb-6">
+            We've sent a verification email to <strong>{formData.email}</strong>. 
+            Please check your inbox and click the verification link to complete your registration.
+          </p>
+          <p className="text-neutral-600 mb-8">
+            Once verified, you'll be able to log in to your account.
+          </p>
+          <div className="flex flex-col space-y-4">
+            <Link
+              to="/login"
+              className="inline-flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-base font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-colors"
+            >
+              Go to Login
+            </Link>
+            <button
+              onClick={() => setVerificationSent(false)}
+              className="inline-flex justify-center py-3 px-4 border border-neutral-300 rounded-lg shadow-sm text-base font-medium text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-colors"
+            >
+              Back to Registration
+            </button>
+          </div>
+        </motion.div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-50 via-white to-secondary-50 px-4 sm:px-6 lg:px-8 py-12">

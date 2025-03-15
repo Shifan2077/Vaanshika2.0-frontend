@@ -9,9 +9,9 @@ const AuthLayout = () => {
   const { currentUser, loading } = useAuth();
 
   // If user is already authenticated, redirect to dashboard
-  if (!loading && currentUser) {
-    return <Navigate to="/dashboard" replace />;
-  }
+  // if (!loading && currentUser) {
+  //   return <Navigate to="/dashboard" replace />;
+  // }
 
   return (
     <div className="min-h-screen relative overflow-hidden">

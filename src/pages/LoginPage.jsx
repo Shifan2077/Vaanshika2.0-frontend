@@ -5,10 +5,11 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
+import { loginUser } from '../services/authService';
 
 const LoginPage = () => {
   const navigate = useNavigate();
-  const { login, googleSignIn } = useAuth();
+  const { googleSignIn } = useAuth();
   
   const [formData, setFormData] = useState({
     email: '',
@@ -69,15 +70,22 @@ const LoginPage = () => {
     setLoginError('');
     
     try {
-      await login(formData.email, formData.password);
+      // Login with Firebase and authenticate with backend
+      await loginUser(formData.email, formData.password);
       navigate('/dashboard');
     } catch (error) {
       console.error('Login error:', error);
-      setLoginError(
-        error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password'
-          ? 'Invalid email or password'
-          : 'Failed to log in. Please try again.'
-      );
+      
+      // Handle different error cases
+      if (error.message && error.message.includes('verify your email')) {
+        setLoginError('Please verify your email before logging in. Check your inbox for a verification link.');
+      } else if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
+        setLoginError('Invalid email or password');
+      } else if (error.code === 'auth/too-many-requests') {
+        setLoginError('Too many failed login attempts. Please try again later or reset your password.');
+      } else {
+        setLoginError('Failed to log in. Please try again.');
+      }
     } finally {
       setIsLoading(false);
     }

@@ -298,6 +298,7 @@
   .auth-container {
     @apply min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 relative;
     background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05));
+    width: 50%;
   }
 
   .auth-card {
@@ -317,6 +318,12 @@
 
   .auth-subtitle {
     @apply mt-2 text-gray-600 dark:text-gray-400;
+  }
+
+  @media (max-width: 768px) {
+    .auth-container {
+      width: 100%;
+    }
   }
 
   /* Animated Background Blobs */

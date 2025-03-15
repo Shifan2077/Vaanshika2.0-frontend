@@ -3,7 +3,7 @@
 
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '../../hooks/useAuth';
+import { useAuth } from '../../contexts/AuthContext';
 import { validateForm } from '../../utils/validation';
 import { parseFirebaseAuthError } from '../../utils/errorHandlers';
 import { motion } from 'framer-motion';
@@ -21,7 +21,7 @@ const Register = () => {
   const [registerError, setRegisterError] = useState('');
   const [registrationSuccess, setRegistrationSuccess] = useState(false);
   
-  const { signup, signInWithGoogle, signInWithFacebook } = useAuth();
+  const { register, loginWithGoogle } = useAuth();
   const navigate = useNavigate();
 
   const handleChange = (e) => {
@@ -72,7 +72,13 @@ const Register = () => {
     
     try {
       const displayName = `${formData.firstName} ${formData.lastName}`;
-      await signup(formData.email, formData.password, displayName);
+      
+      // Call the register function from AuthContext
+      await register(formData.email, formData.password, {
+        displayName,
+        firstName: formData.firstName,
+        lastName: formData.lastName
+      });
       
       // Show success message instead of navigating to dashboard
       setRegistrationSuccess(true);
@@ -86,7 +92,16 @@ const Register = () => {
         confirmPassword: ''
       });
     } catch (error) {
-      setRegisterError(parseFirebaseAuthError(error));
+      // Parse error message
+      let errorMessage = 'Registration failed. Please try again.';
+      
+      if (error.message) {
+        errorMessage = error.message;
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+      }
+      
+      setRegisterError(errorMessage);
     } finally {
       setIsSubmitting(false);
     }
@@ -95,20 +110,19 @@ const Register = () => {
   const handleGoogleLogin = async () => {
     try {
       setRegisterError('');
-      await signInWithGoogle();
+      await loginWithGoogle();
       navigate('/dashboard');
     } catch (error) {
-      setRegisterError(parseFirebaseAuthError(error));
-    }
-  };
-
-  const handleFacebookLogin = async () => {
-    try {
-      setRegisterError('');
-      await signInWithFacebook();
-      navigate('/dashboard');
-    } catch (error) {
-      setRegisterError(parseFirebaseAuthError(error));
+      // Parse error message
+      let errorMessage = 'Google login failed. Please try again.';
+      
+      if (error.message) {
+        errorMessage = error.message;
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+      }
+      
+      setRegisterError(errorMessage);
     }
   };
 
@@ -284,18 +298,6 @@ const Register = () => {
               <path d="M21.8055 10.0415H21V10H12V14H17.6515C17.2571 15.1082 16.5467 16.0766 15.608 16.7855L15.6095 16.7845L18.7045 19.4035C18.4855 19.6025 22 17 22 12C22 11.3295 21.931 10.675 21.8055 10.0415Z" fill="#1976D2"/>
             </svg>
             Continue with Google
-          </button>
-          
-          <button 
-            type="button" 
-            onClick={handleFacebookLogin}
-            className="social-login-btn-glass w-full"
-          >
-            <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M12 2C6.477 2 2 6.477 2 12C2 16.991 5.657 21.128 10.438 21.879V14.89H7.898V12H10.438V9.797C10.438 7.291 11.93 5.907 14.215 5.907C15.309 5.907 16.453 6.102 16.453 6.102V8.562H15.193C13.95 8.562 13.563 9.333 13.563 10.124V12H16.336L15.893 14.89H13.563V21.879C18.343 21.129 22 16.99 22 12C22 6.477 17.523 2 12 2Z" fill="#1877F2"/>
-              <path d="M15.893 14.89L16.336 12H13.563V10.124C13.563 9.333 13.95 8.562 15.193 8.562H16.453V6.102C16.453 6.102 15.309 5.907 14.215 5.907C11.93 5.907 10.438 7.291 10.438 9.797V12H7.898V14.89H10.438V21.879C11.052 21.959 11.674 22 12.305 22C12.926 22 13.538 21.959 14.142 21.879V14.89H15.893Z" fill="white"/>
-            </svg>
-            Continue with Facebook
           </button>
         </motion.div>
         

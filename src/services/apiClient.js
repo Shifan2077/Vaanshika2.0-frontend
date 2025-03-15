@@ -1,25 +1,38 @@
 // File: src/services/apiClient.js
-// API client for making HTTP requests to the backend
+// API client for making requests to the backend
 
 import axios from 'axios';
+// Keep Firebase auth for Google sign-in
 import { auth } from './firebase';
+import { getToken } from './authService';
 
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:3000/api';
-
+// Create an axios instance with base URL
 const apiClient = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:5000/api',
   headers: {
     'Content-Type': 'application/json'
   }
 });
 
-// Add a request interceptor to include the auth token in requests
+// Add a request interceptor to add the auth token to requests
 apiClient.interceptors.request.use(
   async (config) => {
+    // First try to get JWT token from localStorage
+    const token = getToken();
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+      return config;
+    }
+    
+    // If no JWT token, try to get Firebase token (for Google sign-in)
     const user = auth.currentUser;
     if (user) {
-      const token = await user.getIdToken();
-      config.headers.Authorization = `Bearer ${token}`;
+      try {
+        const firebaseToken = await user.getIdToken();
+        config.headers.Authorization = `Bearer ${firebaseToken}`;
+      } catch (error) {
+        console.error('Error getting Firebase auth token:', error);
+      }
     }
     return config;
   },
@@ -34,16 +47,40 @@ apiClient.interceptors.response.use(
     return response;
   },
   (error) => {
-    const { response } = error;
-    
-    if (response && response.status === 401) {
-      // Handle unauthorized access
-      console.error('Unauthorized access. Please log in again.');
-    }
-    
-    if (response && response.status === 500) {
+    // Handle specific error cases
+    if (error.response) {
+      // The request was made and the server responded with a status code
+      // that falls out of the range of 2xx
+      console.error('API Error Response:', error.response.data);
+      
+      // Handle authentication errors
+      if (error.response.status === 401) {
+        // Unauthorized - could trigger a sign out or refresh token
+        console.warn('Authentication error: User is not authenticated');
+        // Clear token on auth error
+        localStorage.removeItem('auth_token');
+      }
+      
+      // Handle forbidden errors
+      if (error.response.status === 403) {
+        console.warn('Authorization error: User does not have permission');
+      }
+      
+      // Handle not found errors
+      if (error.response.status === 404) {
+        console.warn('Resource not found');
+      }
+      
       // Handle server errors
-      console.error('Server error occurred. Please try again later.');
+      if (error.response.status >= 500) {
+        console.error('Server error occurred');
+      }
+    } else if (error.request) {
+      // The request was made but no response was received
+      console.error('No response received:', error.request);
+    } else {
+      // Something happened in setting up the request that triggered an Error
+      console.error('Request error:', error.message);
     }
     
     return Promise.reject(error);

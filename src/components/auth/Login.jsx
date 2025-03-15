@@ -1,11 +1,10 @@
 // File: src/components/auth/Login.jsx
 // Login component for user authentication
 
-import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '../../hooks/useAuth';
+import React, { useState, useEffect } from 'react';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
 import { validateForm } from '../../utils/validation';
-import { parseFirebaseAuthError } from '../../utils/errorHandlers';
 import { motion } from 'framer-motion';
 
 const Login = () => {
@@ -16,12 +15,28 @@ const Login = () => {
   const [formErrors, setFormErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loginError, setLoginError] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
   const [isResendingEmail, setIsResendingEmail] = useState(false);
   const [resendSuccess, setResendSuccess] = useState(false);
   const [needsVerification, setNeedsVerification] = useState(false);
   
-  const { login, signInWithGoogle, signInWithFacebook, resendVerificationEmail } = useAuth();
+  const { login, loginWithGoogle, resendVerificationEmail } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // Check for success message in location state (e.g., from email verification)
+  useEffect(() => {
+    if (location.state && location.state.message) {
+      setSuccessMessage(location.state.message);
+      
+      // Clear the location state after displaying the message
+      const timer = setTimeout(() => {
+        window.history.replaceState({}, document.title);
+      }, 100);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [location]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -37,6 +52,10 @@ const Login = () => {
         [name]: ''
       });
     }
+    
+    // Clear any previous success or error messages
+    setSuccessMessage('');
+    setLoginError('');
   };
 
   const handleSubmit = async (e) => {
@@ -60,15 +79,24 @@ const Login = () => {
     setNeedsVerification(false);
     
     try {
-      await login(formData.email, formData.password);
+      const userData = await login(formData.email, formData.password);
       navigate('/dashboard');
     } catch (error) {
+      // Parse error message
+      let errorMessage = 'Login failed. Please try again.';
+      
+      if (error.message) {
+        errorMessage = error.message;
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+      }
+      
       // Check if the error is due to email not being verified
-      if (error.message && error.message.includes('Email not verified')) {
+      if (errorMessage.includes('Email not verified')) {
         setNeedsVerification(true);
         setLoginError('Please verify your email before logging in. Check your inbox for a verification link.');
       } else {
-        setLoginError(parseFirebaseAuthError(error));
+        setLoginError(errorMessage);
       }
     } finally {
       setIsSubmitting(false);
@@ -80,11 +108,20 @@ const Login = () => {
     setResendSuccess(false);
     
     try {
-      await resendVerificationEmail();
+      await resendVerificationEmail(formData.email);
       setResendSuccess(true);
       setTimeout(() => setResendSuccess(false), 5000); // Hide success message after 5 seconds
     } catch (error) {
-      setLoginError(parseFirebaseAuthError(error));
+      // Parse error message
+      let errorMessage = 'Failed to resend verification email. Please try again.';
+      
+      if (error.message) {
+        errorMessage = error.message;
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+      }
+      
+      setLoginError(errorMessage);
     } finally {
       setIsResendingEmail(false);
     }
@@ -93,20 +130,19 @@ const Login = () => {
   const handleGoogleLogin = async () => {
     try {
       setLoginError('');
-      await signInWithGoogle();
+      await loginWithGoogle();
       navigate('/dashboard');
     } catch (error) {
-      setLoginError(parseFirebaseAuthError(error));
-    }
-  };
-
-  const handleFacebookLogin = async () => {
-    try {
-      setLoginError('');
-      await signInWithFacebook();
-      navigate('/dashboard');
-    } catch (error) {
-      setLoginError(parseFirebaseAuthError(error));
+      // Parse error message
+      let errorMessage = 'Google login failed. Please try again.';
+      
+      if (error.message) {
+        errorMessage = error.message;
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+      }
+      
+      setLoginError(errorMessage);
     }
   };
 
@@ -195,6 +231,18 @@ const Login = () => {
           </motion.div>
         )}
         
+        {successMessage && (
+          <motion.div 
+            className="bg-success-50 border border-success-200 text-success-700 px-4 py-3 rounded-lg mb-6" 
+            role="alert"
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
+          >
+            <p>{successMessage}</p>
+          </motion.div>
+        )}
+        
         {/* Social Login Buttons */}
         <motion.div 
           className="space-y-3 mb-6"
@@ -214,18 +262,6 @@ const Login = () => {
               <path d="M21.8055 10.0415H21V10H12V14H17.6515C17.2571 15.1082 16.5467 16.0766 15.608 16.7855L15.6095 16.7845L18.7045 19.4035C18.4855 19.6025 22 17 22 12C22 11.3295 21.931 10.675 21.8055 10.0415Z" fill="#1976D2"/>
             </svg>
             Continue with Google
-          </button>
-          
-          <button 
-            type="button" 
-            onClick={handleFacebookLogin}
-            className="social-login-btn-glass w-full"
-          >
-            <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M12 2C6.477 2 2 6.477 2 12C2 16.991 5.657 21.128 10.438 21.879V14.89H7.898V12H10.438V9.797C10.438 7.291 11.93 5.907 14.215 5.907C15.309 5.907 16.453 6.102 16.453 6.102V8.562H15.193C13.95 8.562 13.563 9.333 13.563 10.124V12H16.336L15.893 14.89H13.563V21.879C18.343 21.129 22 16.99 22 12C22 6.477 17.523 2 12 2Z" fill="#1877F2"/>
-              <path d="M15.893 14.89L16.336 12H13.563V10.124C13.563 9.333 13.95 8.562 15.193 8.562H16.453V6.102C16.453 6.102 15.309 5.907 14.215 5.907C11.93 5.907 10.438 7.291 10.438 9.797V12H7.898V14.89H10.438V21.879C11.052 21.959 11.674 22 12.305 22C12.926 22 13.538 21.959 14.142 21.879V14.89H15.893Z" fill="white"/>
-            </svg>
-            Continue with Facebook
           </button>
         </motion.div>
         

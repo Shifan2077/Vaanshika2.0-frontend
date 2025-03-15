@@ -20,6 +20,7 @@ import MediaPage from './pages/MediaPage';
 import Login from './components/auth/Login';
 import Register from './components/auth/Register';
 import ForgotPassword from './components/auth/ForgotPassword';
+import VerifyEmail from './components/auth/VerifyEmail';
 
 // Context Providers
 import { AuthProvider } from './contexts/AuthContext';
@@ -54,6 +55,9 @@ function App() {
                   </Route>
                   <Route path="forgot-password" element={<AuthLayout />}>
                     <Route index element={<ForgotPassword />} />
+                  </Route>
+                  <Route path="verify-email/:token" element={<AuthLayout />}>
+                    <Route index element={<VerifyEmail />} />
                   </Route>
                   
                   {/* Protected Routes */}

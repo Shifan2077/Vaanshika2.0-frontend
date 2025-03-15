@@ -1,78 +1,125 @@
 // File: src/utils/treeHelpers.js
 // Helper functions for building and manipulating family trees
 
-// Build a hierarchical tree structure from flat member data
-export const buildFamilyTree = (members, rootMemberId = null) => {
-  if (!members || members.length === 0) return null;
+/**
+ * Builds a hierarchical tree structure from flat family member data
+ * @param {Array} members - Array of family members
+ * @param {String} rootId - Optional ID of the root member (if not provided, will find members without parents)
+ * @returns {Object} - Hierarchical tree structure for visualization
+ */
+export const buildFamilyTree = (members, rootId = null) => {
+  console.log('Building family tree with members:', members);
   
+  if (!members || members.length === 0) {
+    console.log('No members provided to buildFamilyTree');
+    return null;
+  }
+
   // Create a map of members by ID for quick lookup
   const membersMap = {};
   members.forEach(member => {
-    membersMap[member._id] = {
+    // Handle both string IDs and MongoDB ObjectIds
+    const memberId = member.id || member._id;
+    
+    membersMap[memberId] = {
       ...member,
+      id: memberId, // Ensure id is set
       children: []
     };
   });
   
-  // Find the root member
-  let rootMember;
-  
-  if (rootMemberId) {
-    // If a specific root is requested, use that
-    rootMember = membersMap[rootMemberId];
+  console.log('Members map created:', Object.keys(membersMap));
+
+  // Find the root member(s)
+  let rootMembers = [];
+  if (rootId) {
+    // If rootId is provided, use that as the root
+    if (membersMap[rootId]) {
+      rootMembers = [membersMap[rootId]];
+    }
   } else {
-    // Otherwise, find the oldest generation member
-    // Sort by generation (ascending) and then by age (descending)
-    const sortedMembers = [...members].sort((a, b) => {
-      if (a.generation !== b.generation) {
-        return a.generation - b.generation;
-      }
-      
-      // If same generation, older members come first
-      const aDate = a.birthDate ? new Date(a.birthDate) : new Date();
-      const bDate = b.birthDate ? new Date(b.birthDate) : new Date();
-      return aDate - bDate;
-    });
-    
-    rootMember = membersMap[sortedMembers[0]._id];
+    // Otherwise, find members without parents
+    rootMembers = members
+      .filter(member => {
+        // Check for parentId in various formats
+        const parentId = member.parentId || (member.parent && member.parent._id);
+        return !parentId;
+      })
+      .map(member => membersMap[member.id || member._id]);
   }
   
-  if (!rootMember) return null;
-  
-  // Build the tree structure
+  console.log('Root members found:', rootMembers.length);
+
+  // If no root members found, use the first member as root
+  if (rootMembers.length === 0 && members.length > 0) {
+    console.log('No root members found, using first member as root');
+    const firstMemberId = members[0].id || members[0]._id;
+    rootMembers = [membersMap[firstMemberId]];
+  }
+
+  // Build the tree by connecting children to parents
   members.forEach(member => {
-    if (member.parents && member.parents.length > 0) {
-      // Add this member as a child to each parent
-      member.parents.forEach(parentId => {
-        if (membersMap[parentId]) {
-          membersMap[parentId].children.push(membersMap[member._id]);
-        }
-      });
+    const memberId = member.id || member._id;
+    const parentId = member.parentId || (member.parent && member.parent._id);
+    
+    if (parentId && membersMap[parentId]) {
+      membersMap[parentId].children.push(membersMap[memberId]);
     }
   });
   
-  // Sort children by birth date
-  Object.values(membersMap).forEach(member => {
-    if (member.children.length > 0) {
-      member.children.sort((a, b) => {
-        const aDate = a.birthDate ? new Date(a.birthDate) : new Date();
-        const bDate = b.birthDate ? new Date(b.birthDate) : new Date();
-        return aDate - bDate;
-      });
+  console.log('Tree structure built');
+
+  // Format the tree for visualization
+  const formatNode = (node) => {
+    // Extract first and last name from the name field if needed
+    let firstName = node.firstName || '';
+    let lastName = node.lastName || '';
+    
+    if (!firstName && !lastName && node.name) {
+      const nameParts = node.name.split(' ');
+      firstName = nameParts[0] || '';
+      lastName = nameParts.slice(1).join(' ') || '';
     }
-  });
-  
-  return rootMember;
+    
+    return {
+      id: node.id || node._id,
+      name: node.name || `${firstName} ${lastName}`.trim(),
+      attributes: {
+        firstName,
+        lastName,
+        gender: node.gender,
+        dateOfBirth: node.birthDate || node.dateOfBirth,
+        dateOfDeath: node.deathDate || node.dateOfDeath,
+        isAlive: node.isAlive !== undefined ? node.isAlive : true,
+        location: node.location,
+        occupation: node.occupation,
+        bio: node.bio || node.notes,
+        photoURL: node.photoURL || node.profilePicture,
+        contactInfo: node.contactInfo || {}
+      },
+      children: node.children.map(child => formatNode(child))
+    };
+  };
+
+  // Return the formatted tree
+  const result = rootMembers.length > 0 ? formatNode(rootMembers[0]) : null;
+  console.log('Final tree structure:', result);
+  return result;
 };
 
-// Find a member in the tree by ID
-export const findMemberInTree = (tree, memberId) => {
+/**
+ * Finds a node in the tree by ID
+ * @param {Object} tree - The tree to search
+ * @param {String} id - The ID to find
+ * @returns {Object|null} - The found node or null
+ */
+export const findNodeById = (tree, id) => {
   if (!tree) return null;
-  if (tree._id === memberId) return tree;
+  if (tree.id === id) return tree;
   
   if (tree.children) {
     for (const child of tree.children) {
-      const found = findMemberInTree(child, memberId);
+      const found = findNodeById(child, id);
       if (found) return found;
     }
   }
@@ -80,148 +127,76 @@ export const findMemberInTree = (tree, memberId) => {
   return null;
 };
 
-// Get all ancestors of a member
-export const getAncestors = (members, memberId) => {
-  if (!members || !memberId) return [];
+/**
+ * Gets the path from the root to a node
+ * @param {Object} tree - The tree to search
+ * @param {String} id - The ID to find
+ * @returns {Array} - Array of nodes from root to the target node
+ */
+export const getPathToNode = (tree, id) => {
+  if (!tree) return [];
   
-  const member = members.find(m => m._id === memberId);
-  if (!member || !member.parents || member.parents.length === 0) return [];
+  if (tree.id === id) return [tree];
   
-  const ancestors = [];
-  const queue = [...member.parents];
-  
-  while (queue.length > 0) {
-    const parentId = queue.shift();
-    const parent = members.find(m => m._id === parentId);
-    
-    if (parent) {
-      ancestors.push(parent);
-      
-      if (parent.parents && parent.parents.length > 0) {
-        queue.push(...parent.parents);
+  if (tree.children) {
+    for (const child of tree.children) {
+      const path = getPathToNode(child, id);
+      if (path.length > 0) {
+        return [tree, ...path];
       }
     }
   }
   
-  return ancestors;
+  return [];
 };
 
-// Get all descendants of a member
-export const getDescendants = (members, memberId) => {
-  if (!members || !memberId) return [];
+/**
+ * Calculates the relationship between two members
+ * @param {Object} tree - The family tree
+ * @param {String} member1Id - ID of the first member
+ * @param {String} member2Id - ID of the second member
+ * @returns {String} - Description of the relationship
+ */
+export const calculateRelationship = (tree, member1Id, member2Id) => {
+  // This is a simplified implementation
+  // A more comprehensive implementation would consider various relationship types
   
-  const descendants = [];
-  const children = members.filter(m => m.parents && m.parents.includes(memberId));
+  const path1 = getPathToNode(tree, member1Id);
+  const path2 = getPathToNode(tree, member2Id);
   
-  if (children.length === 0) return [];
-  
-  descendants.push(...children);
-  
-  children.forEach(child => {
-    const childDescendants = getDescendants(members, child._id);
-    descendants.push(...childDescendants);
-  });
-  
-  return descendants;
-};
-
-// Calculate the relationship between two members
-export const calculateRelationship = (members, member1Id, member2Id) => {
-  if (!members || members.length === 0 || !member1Id || !member2Id) {
+  if (path1.length === 0 || path2.length === 0) {
     return 'Unknown';
   }
   
-  if (member1Id === member2Id) {
-    return 'Self';
+  // Find the common ancestor
+  let commonAncestorIndex = 0;
+  const minLength = Math.min(path1.length, path2.length);
+  
+  while (commonAncestorIndex < minLength && path1[commonAncestorIndex].id === path2[commonAncestorIndex].id) {
+    commonAncestorIndex++;
   }
   
-  const membersMap = {};
-  members.forEach(member => {
-    membersMap[member._id] = member;
-  });
-  
-  const member1 = membersMap[member1Id];
-  const member2 = membersMap[member2Id];
-  
-  if (!member1 || !member2) {
-    return 'Unknown';
+  if (commonAncestorIndex === 0) {
+    return 'Not related';
   }
   
-  // Check if member2 is a parent of member1
-  if (member1.parents && member1.parents.includes(member2Id)) {
-    return member2.gender === 'male' ? 'Father' : 'Mother';
-  }
+  const distance1 = path1.length - commonAncestorIndex;
+  const distance2 = path2.length - commonAncestorIndex;
   
-  // Check if member1 is a parent of member2
-  if (member2.parents && member2.parents.includes(member1Id)) {
-    return member1.gender === 'male' ? 'Child' : 'Child';
+  if (distance1 === 0 && distance2 === 1) {
+    return 'Parent';
+  } else if (distance1 === 1 && distance2 === 0) {
+    return 'Child';
+  } else if (distance1 === 1 && distance2 === 1) {
+    return 'Sibling';
+  } else {
+    return `Related (${distance1} steps up, ${distance2} steps down)`;
   }
-  
-  // Check if they are siblings (share at least one parent)
-  if (member1.parents && member2.parents) {
-    const commonParents = member1.parents.filter(parentId => 
-      member2.parents.includes(parentId)
-    );
-    
-    if (commonParents.length > 0) {
-      return 'Sibling';
-    }
-  }
-  
-  // More complex relationships would require traversing the tree
-  return 'Relative';
 };
 
-// Find the common ancestor of two members
-export const findCommonAncestor = (members, member1Id, member2Id) => {
-  if (!members || members.length === 0 || !member1Id || !member2Id) {
-    return null;
-  }
-  
-  const membersMap = {};
-  members.forEach(member => {
-    membersMap[member._id] = member;
-  });
-  
-  const member1 = membersMap[member1Id];
-  const member2 = membersMap[member2Id];
-  
-  if (!member1 || !member2) {
-    return null;
-  }
-  
-  // Get all ancestors of member1
-  const member1Ancestors = new Set();
-  const queue1 = [...(member1.parents || [])];
-  
-  while (queue1.length > 0) {
-    const parentId = queue1.shift();
-    member1Ancestors.add(parentId);
-    
-    const parent = membersMap[parentId];
-    if (parent && parent.parents) {
-      queue1.push(...parent.parents);
-    }
-  }
-  
-  // Check if member2 or any of its ancestors is in member1's ancestors
-  if (member1Ancestors.has(member2Id)) {
-    return member2;
-  }
-  
-  const queue2 = [...(member2.parents || [])];
-  while (queue2.length > 0) {
-    const parentId = queue2.shift();
-    
-    if (member1Ancestors.has(parentId)) {
-      return membersMap[parentId];
-    }
-    
-    const parent = membersMap[parentId];
-    if (parent && parent.parents) {
-      queue2.push(...parent.parents);
-    }
-  }
-  
-  return null;
+export default {
+  buildFamilyTree,
+  findNodeById,
+  getPathToNode,
+  calculateRelationship
 }; 

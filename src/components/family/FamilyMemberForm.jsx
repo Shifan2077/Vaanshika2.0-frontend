@@ -3,33 +3,37 @@
 
 import React, { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
-import { useFamily } from '../../hooks/useFamily';
+import { useFamily } from '../../contexts/FamilyContext';
 
 const FamilyMemberForm = ({ 
-  member, 
-  parentId, 
-  isEdit = false, 
+  mode = 'add',
+  initialData = null, 
+  parentId = null, 
   onSubmit, 
   onCancel 
 }) => {
   const { loading } = useFamily();
   const [formData, setFormData] = useState({
-    name: '',
+    firstName: '',
+    lastName: '',
     gender: '',
     birthDate: '',
     deathDate: '',
-    birthPlace: '',
+    isAlive: true,
+    location: '',
     occupation: '',
     bio: '',
-    imageUrl: '',
-    email: '',
-    phone: '',
-    address: '',
-    socialMedia: {
-      facebook: '',
-      twitter: '',
-      instagram: '',
-      linkedin: ''
+    photo: '',
+    contactInfo: {
+      email: '',
+      phone: '',
+      address: '',
+      socialMedia: {
+        facebook: '',
+        twitter: '',
+        instagram: '',
+        linkedin: ''
+      }
     }
   });
   const [errors, setErrors] = useState({});
@@ -37,44 +41,84 @@ const FamilyMemberForm = ({
 
   // Initialize form with member data if editing
   useEffect(() => {
-    if (isEdit && member) {
-      const { name, attributes = {} } = member;
+    if (mode === 'edit' && initialData) {
+      const { name, attributes = {} } = initialData;
+      
+      // Split name into first and last name if available
+      let firstName = '';
+      let lastName = '';
+      if (name) {
+        const nameParts = name.split(' ');
+        firstName = nameParts[0] || '';
+        lastName = nameParts.slice(1).join(' ') || '';
+      }
+      
       setFormData({
-        name: name || '',
+        firstName: attributes.firstName || firstName,
+        lastName: attributes.lastName || lastName,
         gender: attributes.gender || '',
-        birthDate: attributes.birthDate || '',
-        deathDate: attributes.deathDate || '',
-        birthPlace: attributes.birthPlace || '',
+        birthDate: attributes.dateOfBirth || '',
+        deathDate: attributes.dateOfDeath || '',
+        isAlive: attributes.isAlive !== undefined ? attributes.isAlive : true,
+        location: attributes.location || '',
         occupation: attributes.occupation || '',
         bio: attributes.bio || '',
-        imageUrl: attributes.imageUrl || '',
-        email: attributes.email || '',
-        phone: attributes.phone || '',
-        address: attributes.address || '',
-        socialMedia: {
-          facebook: attributes.socialMedia?.facebook || '',
-          twitter: attributes.socialMedia?.twitter || '',
-          instagram: attributes.socialMedia?.instagram || '',
-          linkedin: attributes.socialMedia?.linkedin || ''
+        photo: attributes.photoURL || '',
+        contactInfo: {
+          email: attributes.contactInfo?.email || '',
+          phone: attributes.contactInfo?.phone || '',
+          address: attributes.contactInfo?.address || '',
+          socialMedia: {
+            facebook: attributes.contactInfo?.socialMedia?.facebook || '',
+            twitter: attributes.contactInfo?.socialMedia?.twitter || '',
+            instagram: attributes.contactInfo?.socialMedia?.instagram || '',
+            linkedin: attributes.contactInfo?.socialMedia?.linkedin || ''
+          }
         }
       });
     }
-  }, [isEdit, member]);
+  }, [mode, initialData]);
 
   // Handle form input changes
   const handleChange = (e) => {
-    const { name, value } = e.target;
+    const { name, value, type, checked } = e.target;
     
-    if (name.includes('.')) {
-      // Handle nested fields (e.g., socialMedia.facebook)
-      const [parent, child] = name.split('.');
+    if (type === 'checkbox') {
       setFormData(prev => ({
         ...prev,
-        [parent]: {
-          ...prev[parent],
-          [child]: value
-        }
+        [name]: checked
       }));
+      return;
+    }
+    
+    if (name.includes('.')) {
+      // Handle nested fields (e.g., contactInfo.email)
+      const parts = name.split('.');
+      
+      if (parts.length === 2) {
+        // Handle two-level nesting (e.g., contactInfo.email)
+        const [parent, child] = parts;
+        setFormData(prev => ({
+          ...prev,
+          [parent]: {
+            ...prev[parent],
+            [child]: value
+          }
+        }));
+      } else if (parts.length === 3) {
+        // Handle three-level nesting (e.g., contactInfo.socialMedia.facebook)
+        const [parent, middle, child] = parts;
+        setFormData(prev => ({
+          ...prev,
+          [parent]: {
+            ...prev[parent],
+            [middle]: {
+              ...prev[parent][middle],
+              [child]: value
+            }
+          }
+        }));
+      }
     } else {
       // Handle regular fields
       setFormData(prev => ({
@@ -97,8 +141,8 @@ const FamilyMemberForm = ({
     const newErrors = {};
     
     // Required fields
-    if (!formData.name.trim()) {
-      newErrors.name = 'Name is required';
+    if (!formData.firstName.trim()) {
+      newErrors.firstName = 'First name is required';
     }
     
     // Date validation
@@ -112,13 +156,13 @@ const FamilyMemberForm = ({
     }
     
     // Email validation
-    if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      newErrors.email = 'Please enter a valid email address';
+    if (formData.contactInfo.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.contactInfo.email)) {
+      newErrors['contactInfo.email'] = 'Please enter a valid email address';
     }
     
     // Phone validation
-    if (formData.phone && !/^\+?[0-9]{10,15}$/.test(formData.phone.replace(/\D/g, ''))) {
-      newErrors.phone = 'Please enter a valid phone number';
+    if (formData.contactInfo.phone && !/^\+?[0-9]{10,15}$/.test(formData.contactInfo.phone.replace(/\D/g, ''))) {
+      newErrors['contactInfo.phone'] = 'Please enter a valid phone number';
     }
     
     setErrors(newErrors);
@@ -138,24 +182,28 @@ const FamilyMemberForm = ({
     try {
       // Prepare data for submission
       const memberData = {
-        name: formData.name,
-        attributes: {
-          gender: formData.gender,
-          birthDate: formData.birthDate,
-          deathDate: formData.deathDate || null,
-          birthPlace: formData.birthPlace,
-          occupation: formData.occupation,
-          bio: formData.bio,
-          imageUrl: formData.imageUrl,
-          email: formData.email,
-          phone: formData.phone,
-          address: formData.address,
-          socialMedia: formData.socialMedia
-        }
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        gender: formData.gender,
+        birthDate: formData.birthDate,
+        deathDate: formData.deathDate || null,
+        isAlive: formData.isAlive,
+        location: formData.location,
+        occupation: formData.occupation,
+        bio: formData.bio,
+        photo: formData.photo,
+        contactInfo: formData.contactInfo
       };
       
+      // Add parentId if provided
+      if (parentId) {
+        memberData.parentId = parentId;
+      }
+      
+      console.log('Submitting member data:', memberData);
+      
       // Call the onSubmit callback with the form data
-      await onSubmit(memberData, isEdit ? member.member_id : parentId);
+      await onSubmit(memberData);
     } catch (error) {
       console.error('Error submitting form:', error);
       setErrors(prev => ({
@@ -170,7 +218,7 @@ const FamilyMemberForm = ({
   return (
     <div className="glassmorphism p-6 max-w-2xl mx-auto">
       <h2 className="text-2xl font-semibold mb-6">
-        {isEdit ? 'Edit Family Member' : 'Add Family Member'}
+        {mode === 'edit' ? 'Edit Family Member' : 'Add Family Member'}
       </h2>
       
       {errors.form && (
@@ -184,21 +232,38 @@ const FamilyMemberForm = ({
         <div className="space-y-4">
           <h3 className="text-lg font-medium border-b border-neutral-200 pb-2 mb-4">Basic Information</h3>
           
-          <div className="form-control">
-            <label htmlFor="name" className="form-label">
-              Name <span className="text-error">*</span>
-            </label>
-            <input
-              type="text"
-              id="name"
-              name="name"
-              value={formData.name}
-              onChange={handleChange}
-              className={`form-input ${errors.name ? 'border-error focus:border-error focus:ring-error' : ''}`}
-              placeholder="Enter full name"
-              required
-            />
-            {errors.name && <p className="form-error">{errors.name}</p>}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="form-control">
+              <label htmlFor="firstName" className="form-label">
+                First Name <span className="text-error">*</span>
+              </label>
+              <input
+                type="text"
+                id="firstName"
+                name="firstName"
+                value={formData.firstName}
+                onChange={handleChange}
+                className={`form-input ${errors.firstName ? 'border-error focus:border-error focus:ring-error' : ''}`}
+                placeholder="First name"
+                required
+              />
+              {errors.firstName && <p className="form-error">{errors.firstName}</p>}
+            </div>
+            
+            <div className="form-control">
+              <label htmlFor="lastName" className="form-label">
+                Last Name
+              </label>
+              <input
+                type="text"
+                id="lastName"
+                name="lastName"
+                value={formData.lastName}
+                onChange={handleChange}
+                className="form-input"
+                placeholder="Last name"
+              />
+            </div>
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -219,12 +284,12 @@ const FamilyMemberForm = ({
             </div>
             
             <div className="form-control">
-              <label htmlFor="birthPlace" className="form-label">Birth Place</label>
+              <label htmlFor="location" className="form-label">Location</label>
               <input
                 type="text"
-                id="birthPlace"
-                name="birthPlace"
-                value={formData.birthPlace}
+                id="location"
+                name="location"
+                value={formData.location}
                 onChange={handleChange}
                 className="form-input"
                 placeholder="City, Country"
@@ -246,16 +311,34 @@ const FamilyMemberForm = ({
             </div>
             
             <div className="form-control">
-              <label htmlFor="deathDate" className="form-label">Death Date</label>
-              <input
-                type="date"
-                id="deathDate"
-                name="deathDate"
-                value={formData.deathDate}
-                onChange={handleChange}
-                className={`form-input ${errors.deathDate ? 'border-error focus:border-error focus:ring-error' : ''}`}
-              />
-              {errors.deathDate && <p className="form-error">{errors.deathDate}</p>}
+              <div className="flex items-center mb-2">
+                <input
+                  type="checkbox"
+                  id="isAlive"
+                  name="isAlive"
+                  checked={formData.isAlive}
+                  onChange={handleChange}
+                  className="form-checkbox"
+                />
+                <label htmlFor="isAlive" className="form-label ml-2 mb-0">
+                  Is Alive
+                </label>
+              </div>
+              
+              {!formData.isAlive && (
+                <div className="mt-2">
+                  <label htmlFor="deathDate" className="form-label">Death Date</label>
+                  <input
+                    type="date"
+                    id="deathDate"
+                    name="deathDate"
+                    value={formData.deathDate}
+                    onChange={handleChange}
+                    className={`form-input ${errors.deathDate ? 'border-error focus:border-error focus:ring-error' : ''}`}
+                  />
+                  {errors.deathDate && <p className="form-error">{errors.deathDate}</p>}
+                </div>
+              )}
             </div>
           </div>
           
@@ -291,40 +374,40 @@ const FamilyMemberForm = ({
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="form-control">
-              <label htmlFor="email" className="form-label">Email</label>
+              <label htmlFor="contactInfo.email" className="form-label">Email</label>
               <input
                 type="email"
-                id="email"
-                name="email"
-                value={formData.email}
+                id="contactInfo.email"
+                name="contactInfo.email"
+                value={formData.contactInfo.email}
                 onChange={handleChange}
-                className={`form-input ${errors.email ? 'border-error focus:border-error focus:ring-error' : ''}`}
+                className={`form-input ${errors['contactInfo.email'] ? 'border-error focus:border-error focus:ring-error' : ''}`}
                 placeholder="Email address"
               />
-              {errors.email && <p className="form-error">{errors.email}</p>}
+              {errors['contactInfo.email'] && <p className="form-error">{errors['contactInfo.email']}</p>}
             </div>
             
             <div className="form-control">
-              <label htmlFor="phone" className="form-label">Phone</label>
+              <label htmlFor="contactInfo.phone" className="form-label">Phone</label>
               <input
                 type="tel"
-                id="phone"
-                name="phone"
-                value={formData.phone}
+                id="contactInfo.phone"
+                name="contactInfo.phone"
+                value={formData.contactInfo.phone}
                 onChange={handleChange}
-                className={`form-input ${errors.phone ? 'border-error focus:border-error focus:ring-error' : ''}`}
+                className={`form-input ${errors['contactInfo.phone'] ? 'border-error focus:border-error focus:ring-error' : ''}`}
                 placeholder="Phone number"
               />
-              {errors.phone && <p className="form-error">{errors.phone}</p>}
+              {errors['contactInfo.phone'] && <p className="form-error">{errors['contactInfo.phone']}</p>}
             </div>
           </div>
           
           <div className="form-control">
-            <label htmlFor="address" className="form-label">Address</label>
+            <label htmlFor="contactInfo.address" className="form-label">Address</label>
             <textarea
-              id="address"
-              name="address"
-              value={formData.address}
+              id="contactInfo.address"
+              name="contactInfo.address"
+              value={formData.contactInfo.address}
               onChange={handleChange}
               className="form-input"
               placeholder="Full address"
@@ -338,12 +421,12 @@ const FamilyMemberForm = ({
           <h3 className="text-lg font-medium border-b border-neutral-200 pb-2 mb-4">Media & Social</h3>
           
           <div className="form-control">
-            <label htmlFor="imageUrl" className="form-label">Profile Image URL</label>
+            <label htmlFor="photo" className="form-label">Profile Image URL</label>
             <input
               type="url"
-              id="imageUrl"
-              name="imageUrl"
-              value={formData.imageUrl}
+              id="photo"
+              name="photo"
+              value={formData.photo}
               onChange={handleChange}
               className="form-input"
               placeholder="https://example.com/image.jpg"
@@ -353,12 +436,12 @@ const FamilyMemberForm = ({
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="form-control">
-              <label htmlFor="socialMedia.facebook" className="form-label">Facebook</label>
+              <label htmlFor="contactInfo.socialMedia.facebook" className="form-label">Facebook</label>
               <input
                 type="url"
-                id="socialMedia.facebook"
-                name="socialMedia.facebook"
-                value={formData.socialMedia.facebook}
+                id="contactInfo.socialMedia.facebook"
+                name="contactInfo.socialMedia.facebook"
+                value={formData.contactInfo.socialMedia.facebook}
                 onChange={handleChange}
                 className="form-input"
                 placeholder="Facebook profile URL"
@@ -366,12 +449,12 @@ const FamilyMemberForm = ({
             </div>
             
             <div className="form-control">
-              <label htmlFor="socialMedia.twitter" className="form-label">Twitter</label>
+              <label htmlFor="contactInfo.socialMedia.twitter" className="form-label">Twitter</label>
               <input
                 type="url"
-                id="socialMedia.twitter"
-                name="socialMedia.twitter"
-                value={formData.socialMedia.twitter}
+                id="contactInfo.socialMedia.twitter"
+                name="contactInfo.socialMedia.twitter"
+                value={formData.contactInfo.socialMedia.twitter}
                 onChange={handleChange}
                 className="form-input"
                 placeholder="Twitter profile URL"
@@ -381,12 +464,12 @@ const FamilyMemberForm = ({
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="form-control">
-              <label htmlFor="socialMedia.instagram" className="form-label">Instagram</label>
+              <label htmlFor="contactInfo.socialMedia.instagram" className="form-label">Instagram</label>
               <input
                 type="url"
-                id="socialMedia.instagram"
-                name="socialMedia.instagram"
-                value={formData.socialMedia.instagram}
+                id="contactInfo.socialMedia.instagram"
+                name="contactInfo.socialMedia.instagram"
+                value={formData.contactInfo.socialMedia.instagram}
                 onChange={handleChange}
                 className="form-input"
                 placeholder="Instagram profile URL"
@@ -394,12 +477,12 @@ const FamilyMemberForm = ({
             </div>
             
             <div className="form-control">
-              <label htmlFor="socialMedia.linkedin" className="form-label">LinkedIn</label>
+              <label htmlFor="contactInfo.socialMedia.linkedin" className="form-label">LinkedIn</label>
               <input
                 type="url"
-                id="socialMedia.linkedin"
-                name="socialMedia.linkedin"
-                value={formData.socialMedia.linkedin}
+                id="contactInfo.socialMedia.linkedin"
+                name="contactInfo.socialMedia.linkedin"
+                value={formData.contactInfo.socialMedia.linkedin}
                 onChange={handleChange}
                 className="form-input"
                 placeholder="LinkedIn profile URL"
@@ -432,7 +515,7 @@ const FamilyMemberForm = ({
                 Saving...
               </span>
             ) : (
-              isEdit ? 'Update Member' : 'Add Member'
+              mode === 'edit' ? 'Update Member' : 'Add Member'
             )}
           </button>
         </div>
@@ -442,9 +525,9 @@ const FamilyMemberForm = ({
 };
 
 FamilyMemberForm.propTypes = {
-  member: PropTypes.object,
+  mode: PropTypes.oneOf(['add', 'edit']),
+  initialData: PropTypes.object,
   parentId: PropTypes.string,
-  isEdit: PropTypes.bool,
   onSubmit: PropTypes.func.isRequired,
   onCancel: PropTypes.func.isRequired
 };

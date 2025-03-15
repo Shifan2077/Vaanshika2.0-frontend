@@ -181,153 +181,155 @@ const ChatPage = () => {
   
   return (
     <PageLayout>
-      <div className="flex h-full overflow-hidden">
-        {/* Sidebar */}
-        <motion.div 
-          className="chat-sidebar"
-          initial={{ x: -20, opacity: 0 }}
-          animate={{ x: 0, opacity: 1 }}
-          transition={{ duration: 0.3 }}
-        >
-          {/* Sidebar header */}
-          <div className="chat-sidebar-header">
-            <h1 className="chat-sidebar-title">Messages</h1>
-            
-            <div className="chat-search-container">
-              <input
-                type="text"
-                placeholder="Search conversations..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="chat-search-input"
-              />
-              <FaSearch className="chat-search-icon" />
-              {searchQuery && (
-                <button
-                  className="chat-search-clear"
-                  onClick={() => setSearchQuery('')}
-                >
-                  <FaTimes />
-                </button>
-              )}
-            </div>
-          </div>
-          
-          {/* Chat rooms list */}
-          <div className="chat-rooms-container">
-            {loading ? (
-              <div className="chat-loading">
-                <LoadingSpinner />
-              </div>
-            ) : error ? (
-              <div className="chat-error">
-                {error}
-              </div>
-            ) : filteredChatRooms.length === 0 ? (
-              <div className="chat-empty-rooms">
-                {searchQuery ? 'No conversations match your search' : 'No conversations yet'}
-              </div>
-            ) : (
-              <div className="chat-rooms-list">
-                {filteredChatRooms.map(room => (
-                  <motion.div
-                    key={room.id}
-                    className={`chat-room-item ${
-                      currentRoom && currentRoom.id === room.id ? 'chat-room-active' : ''
-                    }`}
-                    onClick={() => navigate(`/chat/${room.id}`)}
-                    whileHover={{ backgroundColor: 'rgba(0,0,0,0.05)' }}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ duration: 0.2 }}
+      <div className="page-content">
+        <div className="chat-container-layout">
+          {/* Sidebar */}
+          <motion.div 
+            className="chat-sidebar"
+            initial={{ x: -20, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            transition={{ duration: 0.3 }}
+          >
+            {/* Sidebar header */}
+            <div className="chat-sidebar-header">
+              <h1 className="chat-sidebar-title">Messages</h1>
+              
+              <div className="chat-search-container">
+                <input
+                  type="text"
+                  placeholder="Search conversations..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="chat-search-input"
+                />
+                <FaSearch className="chat-search-icon" />
+                {searchQuery && (
+                  <button
+                    className="chat-search-clear"
+                    onClick={() => setSearchQuery('')}
                   >
-                    <div className="chat-room-content">
-                      <div className="chat-room-avatar-container">
-                        {getChatAvatar(room) ? (
-                          <img 
-                            src={getChatAvatar(room)} 
-                            alt={getChatName(room)} 
-                            className="chat-room-avatar"
-                          />
-                        ) : (
-                          <div className="chat-room-avatar-fallback">
-                            {getInitials(getChatName(room))}
-                          </div>
-                        )}
-                        {room.unreadCount > 0 && (
-                          <div className="chat-room-badge">
-                            {room.unreadCount}
-                          </div>
-                        )}
-                      </div>
-                      <div className="chat-room-info">
-                        <div className="chat-room-header">
-                          <h3 className="chat-room-name">
-                            {getChatName(room)}
-                          </h3>
-                          {room.lastMessage && (
-                            <span className="chat-room-time">
-                              {new Date(room.lastMessage.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                            </span>
+                    <FaTimes />
+                  </button>
+                )}
+              </div>
+            </div>
+            
+            {/* Chat rooms list - scrollable */}
+            <div className="chat-rooms-container">
+              {loading ? (
+                <div className="chat-loading">
+                  <LoadingSpinner />
+                </div>
+              ) : error ? (
+                <div className="chat-error">
+                  {error}
+                </div>
+              ) : filteredChatRooms.length === 0 ? (
+                <div className="chat-empty-rooms">
+                  {searchQuery ? 'No conversations match your search' : 'No conversations yet'}
+                </div>
+              ) : (
+                <div className="chat-rooms-list">
+                  {filteredChatRooms.map(room => (
+                    <motion.div
+                      key={room.id}
+                      className={`chat-room-item ${
+                        currentRoom && currentRoom.id === room.id ? 'chat-room-active' : ''
+                      }`}
+                      onClick={() => navigate(`/chat/${room.id}`)}
+                      whileHover={{ backgroundColor: 'rgba(0,0,0,0.05)' }}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ duration: 0.2 }}
+                    >
+                      <div className="chat-room-content">
+                        <div className="chat-room-avatar-container">
+                          {getChatAvatar(room) ? (
+                            <img 
+                              src={getChatAvatar(room)} 
+                              alt={getChatName(room)} 
+                              className="chat-room-avatar"
+                            />
+                          ) : (
+                            <div className="chat-room-avatar-fallback">
+                              {getInitials(getChatName(room))}
+                            </div>
+                          )}
+                          {room.unreadCount > 0 && (
+                            <div className="chat-room-badge">
+                              {room.unreadCount}
+                            </div>
                           )}
                         </div>
-                        <p className="chat-room-preview">
-                          {room.lastMessage ? room.lastMessage.text : 'No messages yet'}
-                        </p>
+                        <div className="chat-room-info">
+                          <div className="chat-room-header">
+                            <h3 className="chat-room-name">
+                              {getChatName(room)}
+                            </h3>
+                            {room.lastMessage && (
+                              <span className="chat-room-time">
+                                {new Date(room.lastMessage.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                            )}
+                          </div>
+                          <p className="chat-room-preview">
+                            {room.lastMessage ? room.lastMessage.text : 'No messages yet'}
+                          </p>
+                        </div>
                       </div>
-                    </div>
-                  </motion.div>
-                ))}
-              </div>
-            )}
-          </div>
-          
-          {/* New chat button */}
-          <div className="chat-sidebar-footer">
-            <button
-              className="chat-new-button"
-              onClick={() => setShowNewRoomModal(true)}
-            >
-              <FaPlus className="chat-new-button-icon" />
-              New Conversation
-            </button>
-          </div>
-        </motion.div>
-        
-        {/* Chat area */}
-        <motion.div 
-          className="chat-main"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.3, delay: 0.1 }}
-        >
-          {currentRoom ? (
-            <ChatWindow 
-              chatId={currentRoom.id}
-              onSendMessage={handleSendMessage}
-              isLoading={false}
-            />
-          ) : (
-            <div className="chat-empty-state">
-              <div className="chat-empty-icon">
-                <FaUsers />
-              </div>
-              <h2 className="chat-empty-title">
-                Select a conversation
-              </h2>
-              <p className="chat-empty-description">
-                Choose an existing conversation from the sidebar or start a new one to connect with your family members.
-              </p>
+                    </motion.div>
+                  ))}
+                </div>
+              )}
+            </div>
+            
+            {/* New chat button - fixed at bottom */}
+            <div className="chat-sidebar-footer">
               <button
-                className="chat-action-button-primary"
+                className="chat-new-button"
                 onClick={() => setShowNewRoomModal(true)}
               >
-                <FaPlus className="chat-button-icon" />
-                Start New Conversation
+                <FaPlus className="chat-new-button-icon" />
+                New Conversation
               </button>
             </div>
-          )}
-        </motion.div>
+          </motion.div>
+          
+          {/* Chat area */}
+          <motion.div 
+            className="chat-main"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.3, delay: 0.1 }}
+          >
+            {currentRoom ? (
+              <ChatWindow 
+                chatId={currentRoom.id}
+                onSendMessage={handleSendMessage}
+                isLoading={false}
+              />
+            ) : (
+              <div className="chat-empty-state">
+                <div className="chat-empty-icon">
+                  <FaUsers />
+                </div>
+                <h2 className="chat-empty-title">
+                  Select a conversation
+                </h2>
+                <p className="chat-empty-description">
+                  Choose an existing conversation from the sidebar or start a new one to connect with your family members.
+                </p>
+                <button
+                  className="chat-action-button-primary"
+                  onClick={() => setShowNewRoomModal(true)}
+                >
+                  <FaPlus className="chat-button-icon" />
+                  Start New Conversation
+                </button>
+              </div>
+            )}
+          </motion.div>
+        </div>
       </div>
       
       {/* New chat room modal */}

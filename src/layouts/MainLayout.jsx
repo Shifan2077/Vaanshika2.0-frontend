@@ -4,7 +4,7 @@
 import React from 'react';
 import { Outlet } from 'react-router-dom';
 import { AuthProvider } from '../contexts/AuthContext';
-import { FamilyProvider } from '../context/FamilyContext';
+import { FamilyProvider } from '../contexts/FamilyContext';
 import { EventProvider } from '../context/EventContext';
 import { FileProvider } from '../context/FileContext';
 import { setupGlobalErrorHandler } from '../utils/errorHandlers';
