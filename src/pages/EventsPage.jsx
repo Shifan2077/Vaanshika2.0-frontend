@@ -303,7 +303,7 @@ const EventsPage = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary-50 via-white to-secondary-50 px-4 py-8 sm:px-6 lg:px-8">
       <div className="max-w-7xl mx-auto">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8">
+        {/* <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8">
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold text-neutral-900">
               Family Events
@@ -331,11 +331,11 @@ const EventsPage = () => {
             </button>
           </div>
         </div>
-        
+         */}
         {/* Calendar toolbar */}
         <div className="glassmorphism bg-white bg-opacity-70 backdrop-blur-lg rounded-xl shadow-md p-4 mb-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between">
-            <div className="flex items-center mb-4 sm:mb-0">
+            <div className="flex items-center mb-2 sm:mb-0">
               <button
                 onClick={handleNavigatePrev}
                 className="p-2 rounded-full hover:bg-neutral-100 transition-colors"
@@ -357,7 +357,7 @@ const EventsPage = () => {
                 <FaChevronRight className="h-4 w-4 text-neutral-700" />
               </button>
               
-              <h2 className="ml-4 text-lg font-medium text-neutral-900">
+              <h2 className="m-0 text-lg font-medium text-neutral-900">
                 {getCalendarTitle()}
               </h2>
             </div>

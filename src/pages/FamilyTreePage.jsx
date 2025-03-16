@@ -10,6 +10,7 @@ import FamilyMemberForm from '../components/family/FamilyMemberForm';
 import Loader from '../components/common/Loader';
 import '../styles/treeStyles.css';
 import familyService from '../services/familyService';
+import { toast } from 'react-hot-toast';
 
 const FamilyTreePage = () => {
   const navigate = useNavigate();
@@ -46,26 +47,67 @@ const FamilyTreePage = () => {
   const [showNewTreeForm, setShowNewTreeForm] = useState(false);
   const [newTreeData, setNewTreeData] = useState({ name: '', description: '' });
   const [dropdownOpen, setDropdownOpen] = useState(null);
+  const [selectedNode, setSelectedNode] = useState(null);
 
   // Load family trees data from backend
   useEffect(() => {
+    console.log('FamilyTreePage: Fetching all family trees');
     fetchAllFamilyTrees();
   }, [fetchAllFamilyTrees]);
 
+  // Log when family trees data changes
+  useEffect(() => {
+    console.log('FamilyTreePage: familyTrees updated:', familyTrees);
+  }, [familyTrees]);
+
   // Handle node click in the tree visualization
-  const handleNodeClick = (nodeDatum) => {
-    setSelectedMember(nodeDatum);
+  const handleNodeClick = (node) => {
+    console.log('Node clicked:', node);
+    setSelectedNode(node);
     setShowMemberDetails(true);
-    setShowForm(false);
+    
+    // If the node is a family unit, we need to handle it differently
+    if (node.type === 'familyUnit' || (node.attributes && node.attributes.type === 'familyUnit')) {
+      // If a specific spouse was clicked (has spouseIndex), select that spouse
+      if (node.spouseIndex !== undefined) {
+        const spouse = node.attributes.spouses[node.spouseIndex];
+        setSelectedMember({
+          ...spouse,
+          id: spouse.id || spouse._id,
+          attributes: spouse
+        });
+      } else {
+        // Otherwise, select the first spouse as default
+        const primarySpouse = node.attributes.spouses[0];
+        setSelectedMember({
+          ...primarySpouse,
+          id: primarySpouse.id || primarySpouse._id,
+          attributes: primarySpouse
+        });
+      }
+    } else {
+      // Regular member node
+      setSelectedMember({
+        ...node,
+        id: node.id,
+        attributes: node.attributes || {}
+      });
+    }
   };
 
-  // Handle adding a child to a member
-  const handleAddChild = (parentNode) => {
-    setParentId(parentNode.id);
-    setSelectedMember(null);
+  // Handle adding a family member (child, parent, or partner)
+  const handleAddChild = (node) => {
+    console.log('Adding family member to node:', node);
+    
+    // Get the relationship mode from the node or default to 'child'
+    const relationshipMode = node.relationshipMode || 'child';
+    
+    setSelectedNode({
+      ...node,
+      relationshipMode
+    });
     setFormMode('add');
     setShowForm(true);
-    setShowMemberDetails(false);
   };
 
   // Handle editing a member
@@ -87,49 +129,70 @@ const FamilyTreePage = () => {
     }
   };
 
-  // Handle form submission for adding/editing a member
-  const handleFormSubmit = async (memberData) => {
+  // Handle form submission for adding/editing members
+  const handleFormSubmit = async (formData) => {
+    setLoading(true);
+    
     try {
-      console.log('Form submission with mode:', formMode, 'and data:', memberData);
+      console.log(`Form submission mode: ${formMode}, data:`, formData);
       
-      if (formMode === 'add') {
-        // Add parent ID if adding a child to an existing member
-        if (parentId) {
-          memberData.parentId = parentId;
-          console.log('Adding child with parent ID:', parentId);
-        } else {
-          console.log('Adding root member to tree:', selectedTreeId);
+      // If adding a member to an existing member
+      if (formMode === 'add' && selectedNode) {
+        const relationshipMode = selectedNode.relationshipMode || 'child';
+        
+        // Set the appropriate ID based on relationship mode
+        if (relationshipMode === 'child') {
+          formData.parentId = selectedNode.id;
+        } else if (relationshipMode === 'parent') {
+          formData.childId = selectedNode.id;
+        } else if (relationshipMode === 'partner') {
+          formData.partnerId = selectedNode.id;
         }
         
-        // Make sure we're using the selected tree ID
-        if (!selectedTreeId) {
-          console.error('No selected tree ID when trying to add member');
-          alert('No family tree selected. Please select or create a family tree first.');
-          return;
+        // Set relationship type if not already set
+        if (!formData.relationshipType) {
+          formData.relationshipType = relationshipMode === 'partner' ? 'spouse' : 
+                                     relationshipMode === 'parent' ? 'parent' : 'child';
         }
-        
-        // Ensure the tree ID is properly formatted
-        const treeId = String(selectedTreeId).trim();
-        console.log('Using formatted treeId for adding member:', treeId);
-        
-        const result = await addMember(memberData);
-        console.log("Member added:", result);
-        
-        if (!result || !result.success) {
-          alert('Failed to add family member: ' + (result?.error || 'Unknown error'));
-          return;
-        }
-      } else if (formMode === 'edit' && selectedMember) {
-        await updateMember(selectedMember.id, memberData);
       }
       
-      // Close form after successful submission
-      setShowForm(false);
-      setSelectedMember(null);
-      setParentId(null);
-    } catch (err) {
-      console.error('Error submitting form:', err);
-      alert('Failed to add family member. Please try again.');
+      // Check if we have a tree selected
+      if (!selectedTreeId && formMode === 'add') {
+        toast.error('Please select a family tree first');
+        setLoading(false);
+        return;
+      }
+      
+      // Format the tree ID to ensure it's a string and trimmed
+      const formattedTreeId = selectedTreeId ? String(selectedTreeId).trim() : '';
+      console.log('Using tree ID for member addition:', formattedTreeId);
+      
+      let result;
+      if (formMode === 'edit' && selectedNode) {
+        result = await updateMember(selectedNode.id, formData);
+      } else {
+        result = await addMember(formData, formattedTreeId);
+      }
+      
+      if (result.success) {
+        toast.success(formMode === 'edit' ? 'Member updated successfully!' : 'Member added successfully!');
+        setShowForm(false);
+        setSelectedNode(null);
+        
+        // Refresh the tree data
+        if (formattedTreeId) {
+          await fetchFamilyTree(formattedTreeId);
+        } else {
+          await fetchAllFamilyTrees();
+        }
+      } else {
+        toast.error(result.message || 'Failed to save member');
+      }
+    } catch (error) {
+      console.error('Error in form submission:', error);
+      toast.error('An error occurred while saving the member');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -142,8 +205,7 @@ const FamilyTreePage = () => {
   // Close form panel
   const handleCloseForm = () => {
     setShowForm(false);
-    setSelectedMember(null);
-    setParentId(null);
+    setSelectedNode(null);
   };
 
   // Start a new family tree
@@ -165,43 +227,52 @@ const FamilyTreePage = () => {
     e.preventDefault();
     
     if (!newTreeData.name) {
-      alert('Please enter a name for your family tree');
+      toast.error('Please provide a name for your family tree');
       return;
     }
     
+    setLoading(true);
+    
     try {
-      setLoading(true);
-      console.log('Creating new tree with data:', newTreeData);
-      const response = await createTree(newTreeData);
-      console.log('Create tree response:', response);
+      console.log('Creating new family tree with data:', newTreeData);
       
-      if (response && response.success) {
+      const result = await createTree(newTreeData);
+      console.log('Create tree response:', result);
+      
+      if (result.success) {
+        toast.success('Family tree created successfully!');
         setShowNewTreeForm(false);
         setNewTreeData({ name: '', description: '' });
         
-        // Set the selected tree ID
-        if (response.treeId) {
-          const treeId = String(response.treeId).trim();
-          console.log('Setting selected tree ID to:', treeId);
-          setSelectedTreeId(treeId);
-          
-          // Also update the family tree data
-          if (response.data) {
-            setFamilyTree(response.data);
-            setFamilyMembers([]);
-          }
-        }
+        // Extract the tree ID from the response
+        const treeId = result.data?._id || result.data?.id;
         
-        // Show form to add root member
-        setFormMode('add');
-        setParentId(null);
-        setShowForm(true);
+        if (treeId) {
+          // Format the tree ID to ensure it's a string and trimmed
+          const formattedTreeId = String(treeId).trim();
+          console.log('Setting selected tree ID to:', formattedTreeId);
+          
+          // Set the selected tree ID
+          setSelectedTreeId(formattedTreeId);
+          
+          // Fetch the newly created tree data
+          await fetchFamilyTree(formattedTreeId);
+          
+          // Show the form to add the root member
+          setFormMode('add');
+          setShowForm(true);
+          setSelectedNode(null);
+        } else {
+          console.error('No tree ID returned from createTree');
+          toast.error('Tree created but ID not returned. Please refresh the page.');
+        }
       } else {
-        alert('Failed to create family tree. Please try again.');
+        console.error('Failed to create tree:', result.message || 'Unknown error');
+        toast.error(result.message || 'Failed to create family tree');
       }
-    } catch (err) {
-      console.error('Error creating family tree:', err);
-      alert('Failed to create family tree. Please try again.');
+    } catch (error) {
+      console.error('Error creating family tree:', error);
+      toast.error('Failed to create family tree. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -212,31 +283,18 @@ const FamilyTreePage = () => {
     // Ensure the tree ID is properly formatted
     const formattedTreeId = String(treeId).trim();
     console.log('Selecting tree with ID:', formattedTreeId);
-    setSelectedTreeId(formattedTreeId);
     
     try {
       setLoading(true);
       
-      // Fetch the specific family tree data
-      const response = await familyService.getFamilyTreeById(formattedTreeId);
-      console.log('Get family tree response:', response);
+      // Use the context function to fetch the family tree and its members
+      await fetchFamilyTree(formattedTreeId);
       
-      if (response.data && response.data.success) {
-        // Set the selected family tree
-        setFamilyTree(response.data.data);
-        
-        // Fetch the members of this tree
-        const membersResponse = await familyService.getFamilyMembersByTreeId(formattedTreeId);
-        console.log('Get family members response:', membersResponse);
-        
-        if (membersResponse.data && membersResponse.data.success) {
-          setFamilyMembers(membersResponse.data.data);
-        }
-      }
+      toast.success('Family tree loaded successfully');
     } catch (err) {
       console.error('Error loading family tree:', err);
       setError('Failed to load the selected family tree. Please try again.');
-      setContextError('Failed to load the selected family tree. Please try again.');
+      toast.error('Failed to load the selected family tree. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -304,14 +362,14 @@ const FamilyTreePage = () => {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
                   </svg>
                 </button>
-                <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
+                <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100 m-0">
                   {familyTree?.name || 'Family Tree'}
                 </h1>
               </div>
             </>
           ) : (
             <>
-              <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">Family Trees</h1>
+              <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100 m-0">Family Trees</h1>
               <button
                 onClick={handleStartNewTree}
                 className="px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white rounded-lg transition-colors"
@@ -411,7 +469,7 @@ const FamilyTreePage = () => {
                 ) : (
                   <div className="col-span-full text-center py-12">
                     <div className="text-5xl mb-4">🌱</div>
-                    <h2 className="text-2xl font-semibold text-gray-900 dark:text-gray-100 mb-2">
+                    <h2 className="text-2xl font-semibold text-gray-900 dark:text-gray-100 m-0 mb-2">
                       No Family Trees Yet
                     </h2>
                     <p className="text-gray-600 dark:text-gray-400 mb-6 max-w-md mx-auto">
@@ -435,7 +493,7 @@ const FamilyTreePage = () => {
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
               >
-                <h2 className="text-2xl font-semibold text-gray-900 dark:text-gray-100 mb-6">
+                <h2 className="text-2xl font-semibold text-gray-900 dark:text-gray-100 m-0 mb-6">
                   Create New Family Tree
                 </h2>
                 
@@ -498,14 +556,10 @@ const FamilyTreePage = () => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
           >
-            <motion.div
-              className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
-              initial={{ y: 50, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-            >
+            
               <div className="p-6">
                 <div className="flex justify-between items-center mb-6">
-                  <h2 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
+                  <h2 className="text-2xl font-semibold text-gray-900 dark:text-gray-100 m-0">
                     {formMode === 'add' ? 'Add Family Member' : 'Edit Family Member'}
                   </h2>
                   <button
@@ -520,14 +574,18 @@ const FamilyTreePage = () => {
                 
                 <FamilyMemberForm
                   mode={formMode}
-                  initialData={selectedMember}
-                  parentId={parentId}
+                  initialData={formMode === 'edit' ? selectedMember : null}
+                  parentId={selectedNode?.id}
+                  isAddingSpouse={selectedNode?.isAddingSpouse}
+                  relationshipMode={selectedNode?.relationshipMode || 'child'}
                   onSubmit={handleFormSubmit}
-                  onCancel={handleCloseForm}
+                  onClose={() => {
+                    setShowForm(false);
+                    setSelectedNode(null);
+                  }}
                 />
               </div>
             </motion.div>
-          </motion.div>
         )}
         
         {/* Member Details - Overlay on top of visualization */}
@@ -536,11 +594,17 @@ const FamilyTreePage = () => {
             className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
+            onClick={(e) => {
+              if (e.target === e.currentTarget) {
+                handleCloseDetails();
+              }
+            }}
           >
             <motion.div
               className="bg-gradient-to-br from-primary-50 to-secondary-50 dark:from-primary-900/50 dark:to-secondary-900/50 backdrop-blur-md rounded-xl shadow-xl max-w-md w-full overflow-hidden"
               initial={{ y: 50, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
+              onClick={(e) => e.stopPropagation()}
             >
               <div className="relative p-6">
                 {/* Background animation */}
@@ -552,8 +616,8 @@ const FamilyTreePage = () => {
                 
                 <div className="relative z-10">
                   <div className="flex justify-between items-center mb-6">
-                    <h2 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
-                      {selectedMember.name}
+                    <h2 className="text-2xl font-semibold text-gray-900 dark:text-gray-100 m-0">
+                      {selectedMember.attributes?.firstName} {selectedMember.attributes?.lastName}
                     </h2>
                     <button
                       onClick={handleCloseDetails}
@@ -570,19 +634,15 @@ const FamilyTreePage = () => {
                       <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-white shadow-lg mb-3">
                         <img 
                           src={selectedMember.attributes.photoURL} 
-                          alt={selectedMember.name} 
+                          alt={`${selectedMember.attributes?.firstName} ${selectedMember.attributes?.lastName}`}
                           className="w-full h-full object-cover"
                         />
                       </div>
                     ) : (
                       <div className="w-24 h-24 rounded-full bg-gradient-to-br from-primary-100 to-primary-200 dark:from-primary-800 dark:to-primary-700 flex items-center justify-center text-2xl font-bold text-primary-600 dark:text-primary-300 border-4 border-white shadow-lg mb-3">
-                        {selectedMember.name.charAt(0)}
+                        {selectedMember.attributes?.firstName?.[0] || '?'}
                       </div>
                     )}
-                    
-                    <h3 className="text-xl font-semibold text-center text-gray-900 dark:text-gray-100">
-                      {selectedMember.name}
-                    </h3>
                   </div>
                   
                   <div className="bg-white/70 dark:bg-gray-800/70 backdrop-blur-sm rounded-lg p-4 space-y-4 mb-6">
@@ -636,17 +696,52 @@ const FamilyTreePage = () => {
                       </div>
                     )}
                     
-                    {selectedMember.attributes?.contactInfo?.email && (
-                      <div>
-                        <h4 className="text-sm font-medium text-gray-500 dark:text-gray-400">Email</h4>
-                        <p className="text-gray-900 dark:text-gray-100">{selectedMember.attributes.contactInfo.email}</p>
-                      </div>
-                    )}
-                    
-                    {selectedMember.attributes?.contactInfo?.phone && (
-                      <div>
-                        <h4 className="text-sm font-medium text-gray-500 dark:text-gray-400">Phone</h4>
-                        <p className="text-gray-900 dark:text-gray-100">{selectedMember.attributes.contactInfo.phone}</p>
+                    {/* Social Media Links */}
+                    {selectedMember.attributes?.socialMedia && (
+                      <div className="mt-4">
+                        <h4 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">Social Media</h4>
+                        <div className="flex space-x-4">
+                          {selectedMember.attributes.socialMedia.facebook && (
+                            <a
+                              href={selectedMember.attributes.socialMedia.facebook}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-blue-600 hover:text-blue-800"
+                            >
+                              Facebook
+                            </a>
+                          )}
+                          {selectedMember.attributes.socialMedia.twitter && (
+                            <a
+                              href={selectedMember.attributes.socialMedia.twitter}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-blue-400 hover:text-blue-600"
+                            >
+                              Twitter
+                            </a>
+                          )}
+                          {selectedMember.attributes.socialMedia.instagram && (
+                            <a
+                              href={selectedMember.attributes.socialMedia.instagram}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-pink-600 hover:text-pink-800"
+                            >
+                              Instagram
+                            </a>
+                          )}
+                          {selectedMember.attributes.socialMedia.linkedin && (
+                            <a
+                              href={selectedMember.attributes.socialMedia.linkedin}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-blue-800 hover:text-blue-900"
+                            >
+                              LinkedIn
+                            </a>
+                          )}
+                        </div>
                       </div>
                     )}
                   </div>

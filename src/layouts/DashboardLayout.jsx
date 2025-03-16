@@ -5,6 +5,7 @@ import React, { useState, useEffect } from 'react';
 import { Outlet, Navigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { motion, AnimatePresence } from 'framer-motion';
+import { CiLogout } from "react-icons/ci";
 
 const DashboardLayout = () => {
   const { currentUser, loading, logout } = useAuth();
@@ -104,7 +105,7 @@ const DashboardLayout = () => {
                 <Link to="/dashboard" className="flex items-center">
                   <span className="text-2xl mr-2">🌳</span>
                   {isSidebarOpen && (
-                    <h2 className="text-xl font-bold bg-gradient-to-r from-primary-600 to-secondary-500 bg-clip-text text-transparent">
+                    <h2 className="text-xl m-0 font-bold bg-gradient-to-r from-primary-600 to-secondary-500 bg-clip-text text-transparent">
                       Vaanshika
                     </h2>
                   )}
@@ -132,10 +133,10 @@ const DashboardLayout = () => {
                     <li key={item.path}>
                       <Link
                         to={item.path}
-                        className={`flex items-center p-3 rounded-lg transition-all duration-200 ${
+                        className={`flex items-center p-3 rounded-lg  transition-all duration-200 ${
                           location.pathname === item.path 
-                            ? 'bg-primary-500 bg-opacity-20 text-primary-700 dark:text-primary-300' 
-                            : 'hover:bg-white hover:bg-opacity-20 text-gray-700 dark:text-gray-300'
+                            ? 'bg-primary-500 bg-opacity-20 text-white sm:text-gray-700 dark:text-primary-300' 
+                            : 'hover:bg-white hover:bg-opacity-20 text-white sm:text-gray-700 dark:text-gray-300'
                         }`}
                       >
                         <span className="text-xl">{item.icon}</span>
@@ -153,10 +154,8 @@ const DashboardLayout = () => {
                   onClick={handleLogout}
                   className="w-full flex items-center p-3 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-white hover:bg-opacity-20 transition-all duration-200"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 001 1h12a1 1 0 001-1V7.414l-5-5H3zm7 5a1 1 0 10-2 0v4a1 1 0 102 0V8zm-2 8a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
-                  </svg>
-                  {isSidebarOpen && (
+<CiLogout />
+{isSidebarOpen && (
                     <span className="ml-3 font-medium">Logout</span>
                   )}
                 </button>
@@ -170,9 +169,11 @@ const DashboardLayout = () => {
           {/* Header */}
           <header className="sticky top-0 z-10 glass-effect-strong shadow-sm p-4">
             <div className="container mx-auto flex items-center justify-between">
+            <div className="flex items-center">
+
               {isMobile && (
                 <button 
-                  className="p-2 rounded-md hover:bg-white hover:bg-opacity-20 transition-colors"
+                  className="pr-2 rounded-md hover:bg-white hover:bg-opacity-20 transition-colors"
                   onClick={toggleSidebar}
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -181,8 +182,7 @@ const DashboardLayout = () => {
                 </button>
               )}
               
-              <div className="flex items-center">
-                <h1 className="text-xl font-semibold text-gray-800 dark:text-white">
+                <h1 className="text-xl m-0 font-semibold text-gray-800 dark:text-white">
                   {navItems.find(item => item.path === location.pathname)?.label || 'Dashboard'}
                 </h1>
               </div>
@@ -209,8 +209,8 @@ const DashboardLayout = () => {
           </header>
           
           {/* Page content */}
-          <div className="flex-1 overflow-y-auto h-[100%] p-4 md:p-6">
-            <div className="container h-[100%]">
+          <div className="flex-1 overflow-y-auto h-[100%] p-0">
+            <div className="container h-[100%] p-0">
               <Outlet />
             </div>
           </div>

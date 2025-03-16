@@ -448,7 +448,7 @@ const LandingPage = () => {
             <div>
               <div className="flex items-center mb-4">
                 <span className="text-2xl mr-2">🌳</span>
-                <h3 className="text-xl font-bold bg-gradient-to-r from-primary-600 to-secondary-500 bg-clip-text text-transparent">Vaanshika</h3>
+                <h3 className="text-xl m-0 font-bold bg-gradient-to-r from-primary-600 to-secondary-500 bg-clip-text text-transparent">Vaanshika</h3>
               </div>
               <p className="text-gray-600 dark:text-gray-400 mb-4">
                 Connecting families across generations.

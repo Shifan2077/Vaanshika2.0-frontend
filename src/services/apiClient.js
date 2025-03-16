@@ -17,6 +17,8 @@ const apiClient = axios.create({
 // Add a request interceptor to add the auth token to requests
 apiClient.interceptors.request.use(
   async (config) => {
+    console.log(`API Request: ${config.method.toUpperCase()} ${config.url}`);
+    
     // First try to get JWT token from localStorage
     const token = getToken();
     if (token) {
@@ -37,6 +39,7 @@ apiClient.interceptors.request.use(
     return config;
   },
   (error) => {
+    console.error('API Request Error:', error);
     return Promise.reject(error);
   }
 );
@@ -44,6 +47,7 @@ apiClient.interceptors.request.use(
 // Add a response interceptor to handle common errors
 apiClient.interceptors.response.use(
   (response) => {
+    console.log(`API Response: ${response.config.method.toUpperCase()} ${response.config.url}`, response.status);
     return response;
   },
   (error) => {
@@ -51,7 +55,7 @@ apiClient.interceptors.response.use(
     if (error.response) {
       // The request was made and the server responded with a status code
       // that falls out of the range of 2xx
-      console.error('API Error Response:', error.response.data);
+      console.error(`API Error Response (${error.response.status}):`, error.response.data);
       
       // Handle authentication errors
       if (error.response.status === 401) {

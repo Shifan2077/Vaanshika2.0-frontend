@@ -17,13 +17,13 @@ const MediaPage = () => {
 
   return (
     <div className="media-page">
-      <div className="page-header">
+      {/* <div className="page-header">
         <h1>Family Media</h1>
         <p>Manage and share family photos, videos, and documents</p>
         <Link to="/media/upload">
           <Button variant="primary">Upload Media</Button>
         </Link>
-      </div>
+      </div> */}
 
       <div className="media-content">
         {files && files.length > 0 ? (

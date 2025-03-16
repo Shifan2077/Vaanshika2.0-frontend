@@ -4,532 +4,514 @@
 import React, { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import { useFamily } from '../../contexts/FamilyContext';
+import { motion } from 'framer-motion';
+import { toast } from 'react-hot-toast';
 
 const FamilyMemberForm = ({ 
-  mode = 'add',
-  initialData = null, 
-  parentId = null, 
-  onSubmit, 
-  onCancel 
+  onClose, 
+  initialData = {}, 
+  mode = 'add', 
+  relatedMemberId = null,
+  relationshipMode = 'child', // 'child', 'parent', or 'partner'
+  onSubmit
 }) => {
-  const { loading } = useFamily();
-  const [formData, setFormData] = useState({
+  const { addMember, updateMember, selectedTreeId } = useFamily();
+  const [loading, setLoading] = useState(false);
+  const [memberData, setMemberData] = useState({
     firstName: '',
     lastName: '',
-    gender: '',
+    gender: 'male',
     birthDate: '',
     deathDate: '',
     isAlive: true,
     location: '',
     occupation: '',
     bio: '',
-    photo: '',
+    photoURL: '',
     contactInfo: {
       email: '',
-      phone: '',
-      address: '',
-      socialMedia: {
-        facebook: '',
-        twitter: '',
-        instagram: '',
-        linkedin: ''
-      }
-    }
+      phone: ''
+    },
+    socialMedia: {
+      facebook: '',
+      twitter: '',
+      instagram: '',
+      linkedin: ''
+    },
+    relationshipType: relationshipMode === 'partner' ? 'spouse' : 
+                     relationshipMode === 'parent' ? 'parent' : 'child'
   });
-  const [errors, setErrors] = useState({});
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Initialize form with member data if editing
+  // Initialize form with data if editing
   useEffect(() => {
     if (mode === 'edit' && initialData) {
-      const { name, attributes = {} } = initialData;
-      
-      // Split name into first and last name if available
-      let firstName = '';
-      let lastName = '';
-      if (name) {
-        const nameParts = name.split(' ');
-        firstName = nameParts[0] || '';
-        lastName = nameParts.slice(1).join(' ') || '';
-      }
-      
-      setFormData({
-        firstName: attributes.firstName || firstName,
-        lastName: attributes.lastName || lastName,
-        gender: attributes.gender || '',
-        birthDate: attributes.dateOfBirth || '',
-        deathDate: attributes.dateOfDeath || '',
-        isAlive: attributes.isAlive !== undefined ? attributes.isAlive : true,
-        location: attributes.location || '',
-        occupation: attributes.occupation || '',
-        bio: attributes.bio || '',
-        photo: attributes.photoURL || '',
-        contactInfo: {
-          email: attributes.contactInfo?.email || '',
-          phone: attributes.contactInfo?.phone || '',
-          address: attributes.contactInfo?.address || '',
-          socialMedia: {
-            facebook: attributes.contactInfo?.socialMedia?.facebook || '',
-            twitter: attributes.contactInfo?.socialMedia?.twitter || '',
-            instagram: attributes.contactInfo?.socialMedia?.instagram || '',
-            linkedin: attributes.contactInfo?.socialMedia?.linkedin || ''
-          }
-        }
+      setMemberData({
+        ...initialData,
+        birthDate: initialData.birthDate ? new Date(initialData.birthDate).toISOString().split('T')[0] : '',
+        deathDate: initialData.deathDate ? new Date(initialData.deathDate).toISOString().split('T')[0] : '',
+        isAlive: initialData.isAlive !== undefined ? initialData.isAlive : true,
+        contactInfo: initialData.contactInfo || { email: '', phone: '' },
+        socialMedia: initialData.socialMedia || { facebook: '', twitter: '', instagram: '', linkedin: '' },
+        photoURL: initialData.photoURL || '',
+        relationshipType: relationshipMode === 'partner' ? 'spouse' : 
+                         relationshipMode === 'parent' ? 'parent' : 
+                         (initialData.relationshipType || 'child')
       });
+    } else {
+      // Set default relationship type based on relationshipMode
+      setMemberData(prev => ({
+        ...prev,
+        relationshipType: relationshipMode === 'partner' ? 'spouse' : 
+                         relationshipMode === 'parent' ? 'parent' : 'child'
+      }));
     }
-  }, [mode, initialData]);
+  }, [initialData, mode, relationshipMode]);
 
-  // Handle form input changes
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
     
-    if (type === 'checkbox') {
-      setFormData(prev => ({
+    if (name.includes('.')) {
+      const [parent, child] = name.split('.');
+      setMemberData(prev => ({
+        ...prev,
+        [parent]: {
+          ...prev[parent],
+          [child]: value
+        }
+      }));
+    } else if (type === 'checkbox') {
+      setMemberData(prev => ({
         ...prev,
         [name]: checked
       }));
-      return;
-    }
-    
-    if (name.includes('.')) {
-      // Handle nested fields (e.g., contactInfo.email)
-      const parts = name.split('.');
-      
-      if (parts.length === 2) {
-        // Handle two-level nesting (e.g., contactInfo.email)
-        const [parent, child] = parts;
-        setFormData(prev => ({
-          ...prev,
-          [parent]: {
-            ...prev[parent],
-            [child]: value
-          }
-        }));
-      } else if (parts.length === 3) {
-        // Handle three-level nesting (e.g., contactInfo.socialMedia.facebook)
-        const [parent, middle, child] = parts;
-        setFormData(prev => ({
-          ...prev,
-          [parent]: {
-            ...prev[parent],
-            [middle]: {
-              ...prev[parent][middle],
-              [child]: value
-            }
-          }
-        }));
-      }
     } else {
-      // Handle regular fields
-      setFormData(prev => ({
+      setMemberData(prev => ({
         ...prev,
         [name]: value
       }));
     }
-    
-    // Clear error for this field
-    if (errors[name]) {
-      setErrors(prev => ({
-        ...prev,
-        [name]: null
-      }));
-    }
   };
 
-  // Validate form
-  const validateForm = () => {
-    const newErrors = {};
-    
-    // Required fields
-    if (!formData.firstName.trim()) {
-      newErrors.firstName = 'First name is required';
-    }
-    
-    // Date validation
-    if (formData.birthDate && formData.deathDate) {
-      const birthDate = new Date(formData.birthDate);
-      const deathDate = new Date(formData.deathDate);
-      
-      if (birthDate > deathDate) {
-        newErrors.deathDate = 'Death date cannot be before birth date';
-      }
-    }
-    
-    // Email validation
-    if (formData.contactInfo.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.contactInfo.email)) {
-      newErrors['contactInfo.email'] = 'Please enter a valid email address';
-    }
-    
-    // Phone validation
-    if (formData.contactInfo.phone && !/^\+?[0-9]{10,15}$/.test(formData.contactInfo.phone.replace(/\D/g, ''))) {
-      newErrors['contactInfo.phone'] = 'Please enter a valid phone number';
-    }
-    
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  // Handle form submission
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    if (!validateForm()) {
-      return;
-    }
-    
-    setIsSubmitting(true);
+    setLoading(true);
     
     try {
-      // Prepare data for submission
-      const memberData = {
-        firstName: formData.firstName,
-        lastName: formData.lastName,
-        gender: formData.gender,
-        birthDate: formData.birthDate,
-        deathDate: formData.deathDate || null,
-        isAlive: formData.isAlive,
-        location: formData.location,
-        occupation: formData.occupation,
-        bio: formData.bio,
-        photo: formData.photo,
-        contactInfo: formData.contactInfo
-      };
-      
-      // Add parentId if provided
-      if (parentId) {
-        memberData.parentId = parentId;
+      // If onSubmit prop is provided, use it
+      if (onSubmit) {
+        await onSubmit(memberData);
+        onClose();
+        return;
       }
       
-      console.log('Submitting member data:', memberData);
+      const formData = new FormData();
       
-      // Call the onSubmit callback with the form data
-      await onSubmit(memberData);
+      // Add all member data to formData
+      Object.keys(memberData).forEach(key => {
+        if (key === 'contactInfo') {
+          formData.append('contactInfo', JSON.stringify(memberData.contactInfo));
+        } else if (key === 'photoURL') {
+          formData.append('photoURL', memberData.photoURL);
+        } else if (key === 'socialMedia') {
+          formData.append('socialMedia', JSON.stringify(memberData.socialMedia));
+        } else if (memberData[key] !== undefined && memberData[key] !== null) {
+          formData.append(key, memberData[key]);
+        }
+      });
+      
+      // Add relationship-specific IDs based on relationshipMode
+      if (relatedMemberId) {
+        if (relationshipMode === 'child') {
+          formData.append('parentId', relatedMemberId);
+        } else if (relationshipMode === 'parent') {
+          formData.append('childId', relatedMemberId);
+        } else if (relationshipMode === 'partner') {
+          formData.append('partnerId', relatedMemberId);
+        }
+      }
+      
+      console.log('Submitting member data:', {
+        ...memberData,
+        relationshipMode,
+        relatedMemberId,
+        relationshipType: memberData.relationshipType
+      });
+      
+      let result;
+      if (mode === 'edit') {
+        result = await updateMember(initialData.id, formData);
+      } else {
+        result = await addMember(formData, selectedTreeId);
+      }
+      
+      if (result && result.success) {
+        toast.success(mode === 'edit' ? 'Member updated successfully!' : 'Member added successfully!');
+        onClose();
+      } else {
+        toast.error(result?.message || 'Failed to save member');
+      }
     } catch (error) {
       console.error('Error submitting form:', error);
-      setErrors(prev => ({
-        ...prev,
-        form: error.message || 'An error occurred while saving the member'
-      }));
+      toast.error('An error occurred while saving the member');
     } finally {
-      setIsSubmitting(false);
+      setLoading(false);
+    }
+  };
+
+  // Get the title based on the relationship mode
+  const getFormTitle = () => {
+    if (mode === 'edit') {
+      return 'Edit Family Member';
+    }
+    
+    switch (relationshipMode) {
+      case 'parent':
+        return 'Add Parent';
+      case 'partner':
+        return 'Add Partner';
+      case 'child':
+      default:
+        return 'Add Child';
     }
   };
 
   return (
-    <div className="glassmorphism p-6 max-w-2xl mx-auto">
-      <h2 className="text-2xl font-semibold mb-6">
-        {mode === 'edit' ? 'Edit Family Member' : 'Add Family Member'}
-      </h2>
-      
-      {errors.form && (
-        <div className="alert-error mb-4">
-          <p>{errors.form}</p>
-        </div>
-      )}
-      
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Basic Information */}
-        <div className="space-y-4">
-          <h3 className="text-lg font-medium border-b border-neutral-200 pb-2 mb-4">Basic Information</h3>
+    <motion.div
+      className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      onClick={onClose}
+    >
+      <motion.div
+        className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto"
+        initial={{ scale: 0.9, y: 20 }}
+        animate={{ scale: 1, y: 0 }}
+        exit={{ scale: 0.9, y: 20 }}
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="p-6">
+          <h2 className="text-2xl font-semibold mb-4 text-gray-800 dark:text-white">
+            {getFormTitle()}
+          </h2>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="form-control">
-              <label htmlFor="firstName" className="form-label">
-                First Name <span className="text-error">*</span>
-              </label>
-              <input
-                type="text"
-                id="firstName"
-                name="firstName"
-                value={formData.firstName}
-                onChange={handleChange}
-                className={`form-input ${errors.firstName ? 'border-error focus:border-error focus:ring-error' : ''}`}
-                placeholder="First name"
-                required
-              />
-              {errors.firstName && <p className="form-error">{errors.firstName}</p>}
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  First Name
+                </label>
+                <input
+                  type="text"
+                  name="firstName"
+                  value={memberData.firstName}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Last Name
+                </label>
+                <input
+                  type="text"
+                  name="lastName"
+                  value={memberData.lastName}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
+                  required
+                />
+              </div>
             </div>
             
-            <div className="form-control">
-              <label htmlFor="lastName" className="form-label">
-                Last Name
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Gender
               </label>
-              <input
-                type="text"
-                id="lastName"
-                name="lastName"
-                value={formData.lastName}
-                onChange={handleChange}
-                className="form-input"
-                placeholder="Last name"
-              />
-            </div>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="form-control">
-              <label htmlFor="gender" className="form-label">Gender</label>
               <select
-                id="gender"
                 name="gender"
-                value={formData.gender}
+                value={memberData.gender}
                 onChange={handleChange}
-                className="form-select"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
               >
-                <option value="">Select gender</option>
                 <option value="male">Male</option>
                 <option value="female">Female</option>
                 <option value="other">Other</option>
               </select>
             </div>
             
-            <div className="form-control">
-              <label htmlFor="location" className="form-label">Location</label>
+            {relatedMemberId && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Relationship Type
+                </label>
+                <select
+                  name="relationshipType"
+                  value={memberData.relationshipType}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
+                >
+                  {relationshipMode === 'partner' && (
+                    <>
+                      <option value="spouse">Spouse</option>
+                      <option value="husband">Husband</option>
+                      <option value="wife">Wife</option>
+                      <option value="partner">Partner</option>
+                    </>
+                  )}
+                  {relationshipMode === 'parent' && (
+                    <>
+                      <option value="parent">Parent</option>
+                      <option value="father">Father</option>
+                      <option value="mother">Mother</option>
+                      <option value="dad">Dad</option>
+                      <option value="mom">Mom</option>
+                      <option value="stepDad">Step Dad</option>
+                      <option value="stepMom">Step Mom</option>
+                    </>
+                  )}
+                  {relationshipMode === 'child' && (
+                    <>
+                      <option value="child">Child</option>
+                      <option value="adopted">Adopted Child</option>
+                      <option value="foster">Foster Child</option>
+                    </>
+                  )}
+                </select>
+              </div>
+            )}
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Birth Date
+                </label>
+                <input
+                  type="date"
+                  name="birthDate"
+                  value={memberData.birthDate}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
+                />
+              </div>
+              
+              <div className="flex flex-col">
+                <div className="flex items-center h-full mt-7">
+                  <input
+                    type="checkbox"
+                    id="isAlive"
+                    name="isAlive"
+                    checked={memberData.isAlive}
+                    onChange={handleChange}
+                    className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                  />
+                  <label htmlFor="isAlive" className="ml-2 block text-sm text-gray-700 dark:text-gray-300">
+                    Is Alive
+                  </label>
+                </div>
+              </div>
+            </div>
+            
+            {!memberData.isAlive && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Death Date
+                </label>
+                <input
+                  type="date"
+                  name="deathDate"
+                  value={memberData.deathDate}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
+                />
+              </div>
+            )}
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Location
+              </label>
               <input
                 type="text"
-                id="location"
                 name="location"
-                value={formData.location}
+                value={memberData.location}
                 onChange={handleChange}
-                className="form-input"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
                 placeholder="City, Country"
               />
             </div>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="form-control">
-              <label htmlFor="birthDate" className="form-label">Birth Date</label>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Occupation
+              </label>
               <input
-                type="date"
-                id="birthDate"
-                name="birthDate"
-                value={formData.birthDate}
+                type="text"
+                name="occupation"
+                value={memberData.occupation}
                 onChange={handleChange}
-                className="form-input"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
               />
             </div>
             
-            <div className="form-control">
-              <div className="flex items-center mb-2">
-                <input
-                  type="checkbox"
-                  id="isAlive"
-                  name="isAlive"
-                  checked={formData.isAlive}
-                  onChange={handleChange}
-                  className="form-checkbox"
-                />
-                <label htmlFor="isAlive" className="form-label ml-2 mb-0">
-                  Is Alive
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Bio
+              </label>
+              <textarea
+                name="bio"
+                value={memberData.bio}
+                onChange={handleChange}
+                rows="3"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
+              ></textarea>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Email
                 </label>
+                <input
+                  type="email"
+                  name="contactInfo.email"
+                  value={memberData.contactInfo.email}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
+                />
               </div>
-              
-              {!formData.isAlive && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Phone
+                </label>
+                <input
+                  type="tel"
+                  name="contactInfo.phone"
+                  value={memberData.contactInfo.phone}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
+                />
+              </div>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Photo URL
+              </label>
+              <input
+                type="url"
+                name="photoURL"
+                value={memberData.photoURL}
+                onChange={handleChange}
+                placeholder="Enter photo URL"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
+              />
+              {memberData.photoURL && (
                 <div className="mt-2">
-                  <label htmlFor="deathDate" className="form-label">Death Date</label>
-                  <input
-                    type="date"
-                    id="deathDate"
-                    name="deathDate"
-                    value={formData.deathDate}
-                    onChange={handleChange}
-                    className={`form-input ${errors.deathDate ? 'border-error focus:border-error focus:ring-error' : ''}`}
+                  <img 
+                    src={memberData.photoURL} 
+                    alt="Preview" 
+                    className="h-20 w-20 object-cover rounded-md"
+                    onError={(e) => {
+                      e.target.onerror = null;
+                      e.target.src = 'https://via.placeholder.com/80?text=Invalid+URL';
+                    }}
                   />
-                  {errors.deathDate && <p className="form-error">{errors.deathDate}</p>}
                 </div>
               )}
             </div>
-          </div>
-          
-          <div className="form-control">
-            <label htmlFor="occupation" className="form-label">Occupation</label>
-            <input
-              type="text"
-              id="occupation"
-              name="occupation"
-              value={formData.occupation}
-              onChange={handleChange}
-              className="form-input"
-              placeholder="Occupation or profession"
-            />
-          </div>
-          
-          <div className="form-control">
-            <label htmlFor="bio" className="form-label">Biography</label>
-            <textarea
-              id="bio"
-              name="bio"
-              value={formData.bio}
-              onChange={handleChange}
-              className="form-input min-h-[100px]"
-              placeholder="Brief biography or notable information"
-            ></textarea>
-          </div>
-        </div>
-        
-        {/* Contact Information */}
-        <div className="space-y-4">
-          <h3 className="text-lg font-medium border-b border-neutral-200 pb-2 mb-4">Contact Information</h3>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="form-control">
-              <label htmlFor="contactInfo.email" className="form-label">Email</label>
-              <input
-                type="email"
-                id="contactInfo.email"
-                name="contactInfo.email"
-                value={formData.contactInfo.email}
-                onChange={handleChange}
-                className={`form-input ${errors['contactInfo.email'] ? 'border-error focus:border-error focus:ring-error' : ''}`}
-                placeholder="Email address"
-              />
-              {errors['contactInfo.email'] && <p className="form-error">{errors['contactInfo.email']}</p>}
+            
+            <div className="space-y-4">
+              <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">Social Media Links</h3>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Facebook Profile
+                </label>
+                <input
+                  type="url"
+                  name="socialMedia.facebook"
+                  value={memberData.socialMedia.facebook}
+                  onChange={handleChange}
+                  placeholder="https://facebook.com/profile"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Twitter Profile
+                </label>
+                <input
+                  type="url"
+                  name="socialMedia.twitter"
+                  value={memberData.socialMedia.twitter}
+                  onChange={handleChange}
+                  placeholder="https://twitter.com/username"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Instagram Profile
+                </label>
+                <input
+                  type="url"
+                  name="socialMedia.instagram"
+                  value={memberData.socialMedia.instagram}
+                  onChange={handleChange}
+                  placeholder="https://instagram.com/username"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  LinkedIn Profile
+                </label>
+                <input
+                  type="url"
+                  name="socialMedia.linkedin"
+                  value={memberData.socialMedia.linkedin}
+                  onChange={handleChange}
+                  placeholder="https://linkedin.com/in/username"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
+                />
+              </div>
             </div>
             
-            <div className="form-control">
-              <label htmlFor="contactInfo.phone" className="form-label">Phone</label>
-              <input
-                type="tel"
-                id="contactInfo.phone"
-                name="contactInfo.phone"
-                value={formData.contactInfo.phone}
-                onChange={handleChange}
-                className={`form-input ${errors['contactInfo.phone'] ? 'border-error focus:border-error focus:ring-error' : ''}`}
-                placeholder="Phone number"
-              />
-              {errors['contactInfo.phone'] && <p className="form-error">{errors['contactInfo.phone']}</p>}
+            <div className="flex justify-end space-x-3 pt-4">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={loading}
+                className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {loading ? 'Saving...' : 'Save'}
+              </button>
             </div>
-          </div>
-          
-          <div className="form-control">
-            <label htmlFor="contactInfo.address" className="form-label">Address</label>
-            <textarea
-              id="contactInfo.address"
-              name="contactInfo.address"
-              value={formData.contactInfo.address}
-              onChange={handleChange}
-              className="form-input"
-              placeholder="Full address"
-              rows="2"
-            ></textarea>
-          </div>
+          </form>
         </div>
-        
-        {/* Media & Social */}
-        <div className="space-y-4">
-          <h3 className="text-lg font-medium border-b border-neutral-200 pb-2 mb-4">Media & Social</h3>
-          
-          <div className="form-control">
-            <label htmlFor="photo" className="form-label">Profile Image URL</label>
-            <input
-              type="url"
-              id="photo"
-              name="photo"
-              value={formData.photo}
-              onChange={handleChange}
-              className="form-input"
-              placeholder="https://example.com/image.jpg"
-            />
-            <p className="form-hint">Enter a URL for the profile image</p>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="form-control">
-              <label htmlFor="contactInfo.socialMedia.facebook" className="form-label">Facebook</label>
-              <input
-                type="url"
-                id="contactInfo.socialMedia.facebook"
-                name="contactInfo.socialMedia.facebook"
-                value={formData.contactInfo.socialMedia.facebook}
-                onChange={handleChange}
-                className="form-input"
-                placeholder="Facebook profile URL"
-              />
-            </div>
-            
-            <div className="form-control">
-              <label htmlFor="contactInfo.socialMedia.twitter" className="form-label">Twitter</label>
-              <input
-                type="url"
-                id="contactInfo.socialMedia.twitter"
-                name="contactInfo.socialMedia.twitter"
-                value={formData.contactInfo.socialMedia.twitter}
-                onChange={handleChange}
-                className="form-input"
-                placeholder="Twitter profile URL"
-              />
-            </div>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="form-control">
-              <label htmlFor="contactInfo.socialMedia.instagram" className="form-label">Instagram</label>
-              <input
-                type="url"
-                id="contactInfo.socialMedia.instagram"
-                name="contactInfo.socialMedia.instagram"
-                value={formData.contactInfo.socialMedia.instagram}
-                onChange={handleChange}
-                className="form-input"
-                placeholder="Instagram profile URL"
-              />
-            </div>
-            
-            <div className="form-control">
-              <label htmlFor="contactInfo.socialMedia.linkedin" className="form-label">LinkedIn</label>
-              <input
-                type="url"
-                id="contactInfo.socialMedia.linkedin"
-                name="contactInfo.socialMedia.linkedin"
-                value={formData.contactInfo.socialMedia.linkedin}
-                onChange={handleChange}
-                className="form-input"
-                placeholder="LinkedIn profile URL"
-              />
-            </div>
-          </div>
-        </div>
-        
-        {/* Form Actions */}
-        <div className="flex justify-end space-x-4 pt-4 border-t border-neutral-200">
-          <button
-            type="button"
-            onClick={onCancel}
-            className="btn-outline"
-            disabled={isSubmitting || loading}
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            className="btn-primary"
-            disabled={isSubmitting || loading}
-          >
-            {isSubmitting ? (
-              <span className="flex items-center">
-                <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                Saving...
-              </span>
-            ) : (
-              mode === 'edit' ? 'Update Member' : 'Add Member'
-            )}
-          </button>
-        </div>
-      </form>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 };
 
 FamilyMemberForm.propTypes = {
-  mode: PropTypes.oneOf(['add', 'edit']),
+  onClose: PropTypes.func.isRequired,
   initialData: PropTypes.object,
-  parentId: PropTypes.string,
-  onSubmit: PropTypes.func.isRequired,
-  onCancel: PropTypes.func.isRequired
+  mode: PropTypes.oneOf(['add', 'edit']),
+  relatedMemberId: PropTypes.string,
+  relationshipMode: PropTypes.oneOf(['child', 'parent', 'partner']),
+  onSubmit: PropTypes.func
 };
 
 export default FamilyMemberForm; 

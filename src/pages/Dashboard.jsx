@@ -64,7 +64,7 @@ const Dashboard = () => {
   };
 
   return (
-    <div className="py-6">
+    <div className="p-6">
       <motion.div 
         className="mb-8"
         initial={{ opacity: 0, y: -20 }}
@@ -98,6 +98,7 @@ const Dashboard = () => {
             <Link 
               to="/family-tree"
               className="text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 text-sm font-medium"
+              onClick={() => console.log('Dashboard: Navigating to family tree page')}
             >
               View All
             </Link>

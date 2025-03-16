@@ -9,10 +9,12 @@ import Input from '../common/Input';
 import Button from '../common/Button';
 import Modal from '../common/Modal';
 
-const AddMember = ({ isOpen, onClose, parentMemberId = null }) => {
+const AddMember = ({ isOpen, onClose, parentMemberId = null, spouseMemberId = null }) => {
   const navigate = useNavigate();
   const { familyTree, addMember, loading } = useFamily();
   const [availableParents, setAvailableParents] = useState([]);
+  const [availableSpouses, setAvailableSpouses] = useState([]);
+  const [showSpouseSection, setShowSpouseSection] = useState(!!spouseMemberId);
   
   const [formData, setFormData] = useState({
     firstName: '',
@@ -20,18 +22,46 @@ const AddMember = ({ isOpen, onClose, parentMemberId = null }) => {
     gender: 'male',
     birthDate: '',
     relationship: '',
-    parents: parentMemberId ? [parentMemberId] : []
+    parents: parentMemberId ? [parentMemberId] : [],
+    spouseId: spouseMemberId || '',
+    relationshipType: spouseMemberId ? 'spouse' : '',
+    photoURL: '',
+    socialMedia: {
+      facebook: '',
+      twitter: '',
+      instagram: '',
+      linkedin: ''
+    }
   });
   
   const [formErrors, setFormErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   useEffect(() => {
-    // Populate available parents from family tree
+    // Populate available parents and potential spouses from family tree
     if (familyTree && familyTree.members) {
       setAvailableParents(familyTree.members);
+      
+      // Filter out members who could be spouses (exclude direct family members)
+      const potentialSpouses = familyTree.members.filter(member => 
+        !formData.parents.includes(member._id) && 
+        member._id !== parentMemberId
+      );
+      setAvailableSpouses(potentialSpouses);
     }
-  }, [familyTree]);
+  }, [familyTree, formData.parents, parentMemberId]);
+  
+  // If spouseMemberId is provided, set it in the form data
+  useEffect(() => {
+    if (spouseMemberId) {
+      setFormData(prev => ({
+        ...prev,
+        spouseId: spouseMemberId,
+        relationshipType: 'spouse'
+      }));
+      setShowSpouseSection(true);
+    }
+  }, [spouseMemberId]);
   
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -65,6 +95,33 @@ const AddMember = ({ isOpen, onClose, parentMemberId = null }) => {
     }
   };
   
+  const handleSpouseChange = (e) => {
+    const { value } = e.target;
+    setFormData({
+      ...formData,
+      spouseId: value
+    });
+  };
+  
+  const toggleSpouseSection = () => {
+    setShowSpouseSection(!showSpouseSection);
+    if (!showSpouseSection) {
+      // Reset spouse fields when showing the section
+      setFormData({
+        ...formData,
+        spouseId: '',
+        relationshipType: 'spouse'
+      });
+    } else {
+      // Clear spouse fields when hiding the section
+      setFormData({
+        ...formData,
+        spouseId: '',
+        relationshipType: ''
+      });
+    }
+  };
+  
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -76,6 +133,11 @@ const AddMember = ({ isOpen, onClose, parentMemberId = null }) => {
       birthDate: { date: true }
     };
     
+    // Add validation for spouse fields if the section is shown
+    if (showSpouseSection && formData.spouseId) {
+      validationRules.relationshipType = { required: true };
+    }
+    
     const { isValid, errors } = validateForm(formData, validationRules);
     
     if (!isValid) {
@@ -86,7 +148,20 @@ const AddMember = ({ isOpen, onClose, parentMemberId = null }) => {
     setIsSubmitting(true);
     
     try {
-      await addMember(formData);
+      // Only include spouse data if the section is shown and a spouse is selected
+      const memberData = {
+        ...formData,
+        spouseId: showSpouseSection ? formData.spouseId : null,
+        relationshipType: showSpouseSection ? formData.relationshipType : null,
+        isPartOfFamilyUnit: !!formData.spouseId
+      };
+      
+      // If adding a spouse, generate a family unit ID
+      if (formData.spouseId) {
+        memberData.familyUnitId = `family_unit_${Date.now()}`;
+      }
+      
+      await addMember(memberData);
       onClose();
       navigate('/family-tree');
     } catch (error) {
@@ -201,6 +276,151 @@ const AddMember = ({ isOpen, onClose, parentMemberId = null }) => {
             </div>
           </div>
         )}
+        
+        {/* Spouse/Partner Section Toggle */}
+        <div className="form-group mt-4">
+          <button
+            type="button"
+            className="text-primary-600 hover:text-primary-800 flex items-center text-sm font-medium"
+            onClick={toggleSpouseSection}
+          >
+            <span className="mr-2">
+              {showSpouseSection ? '−' : '+'}
+            </span>
+            {showSpouseSection ? 'Hide Spouse/Partner Information' : 'Add Spouse/Partner Information'}
+          </button>
+        </div>
+        
+        {/* Spouse/Partner Fields */}
+        {showSpouseSection && (
+          <div className="spouse-section border-l-2 border-primary-200 pl-4 mt-2 mb-4">
+            <div className="form-group">
+              <label className="input-label">Spouse/Partner</label>
+              <select
+                name="spouseId"
+                value={formData.spouseId}
+                onChange={handleSpouseChange}
+                className="form-select w-full"
+              >
+                <option value="">Select a spouse/partner</option>
+                {availableSpouses.map(spouse => (
+                  <option key={spouse._id} value={spouse._id}>
+                    {spouse.firstName} {spouse.lastName}
+                  </option>
+                ))}
+              </select>
+              {formErrors.spouseId && (
+                <p className="text-error-600 text-sm mt-1">{formErrors.spouseId}</p>
+              )}
+            </div>
+            
+            <div className="form-group mt-3">
+              <label className="input-label">Relationship Type</label>
+              <select
+                name="relationshipType"
+                value={formData.relationshipType}
+                onChange={handleChange}
+                className="form-select w-full"
+                disabled={!formData.spouseId}
+              >
+                <option value="">Select relationship type</option>
+                <option value="spouse">Spouse</option>
+                <option value="partner">Partner</option>
+                <option value="husband">Husband</option>
+                <option value="wife">Wife</option>
+                <option value="ex-spouse">Ex-Spouse</option>
+                <option value="fiancé">Fiancé</option>
+                <option value="fiancée">Fiancée</option>
+              </select>
+              {formErrors.relationshipType && (
+                <p className="text-error-600 text-sm mt-1">{formErrors.relationshipType}</p>
+              )}
+            </div>
+          </div>
+        )}
+        
+        <Input
+          label="Photo URL"
+          type="url"
+          name="photoURL"
+          value={formData.photoURL}
+          onChange={handleChange}
+          placeholder="Enter photo URL"
+          error={formErrors.photoURL}
+        />
+        
+        <div className="form-section mt-4">
+          <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-3">Social Media Links</h3>
+          <div className="space-y-3">
+            <Input
+              label="Facebook"
+              type="url"
+              name="socialMedia.facebook"
+              value={formData.socialMedia.facebook}
+              onChange={(e) => {
+                setFormData({
+                  ...formData,
+                  socialMedia: {
+                    ...formData.socialMedia,
+                    facebook: e.target.value
+                  }
+                });
+              }}
+              placeholder="Facebook profile URL"
+            />
+            
+            <Input
+              label="Twitter"
+              type="url"
+              name="socialMedia.twitter"
+              value={formData.socialMedia.twitter}
+              onChange={(e) => {
+                setFormData({
+                  ...formData,
+                  socialMedia: {
+                    ...formData.socialMedia,
+                    twitter: e.target.value
+                  }
+                });
+              }}
+              placeholder="Twitter profile URL"
+            />
+            
+            <Input
+              label="Instagram"
+              type="url"
+              name="socialMedia.instagram"
+              value={formData.socialMedia.instagram}
+              onChange={(e) => {
+                setFormData({
+                  ...formData,
+                  socialMedia: {
+                    ...formData.socialMedia,
+                    instagram: e.target.value
+                  }
+                });
+              }}
+              placeholder="Instagram profile URL"
+            />
+            
+            <Input
+              label="LinkedIn"
+              type="url"
+              name="socialMedia.linkedin"
+              value={formData.socialMedia.linkedin}
+              onChange={(e) => {
+                setFormData({
+                  ...formData,
+                  socialMedia: {
+                    ...formData.socialMedia,
+                    linkedin: e.target.value
+                  }
+                });
+              }}
+              placeholder="LinkedIn profile URL"
+            />
+          </div>
+        </div>
         
         <div className="form-actions">
           <Button
