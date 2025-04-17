@@ -78,43 +78,67 @@ export function FamilyProvider({ children }) {
       
       console.log('Family tree response:', response);
       
+      if (!response || !response.data || !response.data.data) {
+        console.error('Invalid response format:', response);
+        throw new Error('Invalid response format from server');
+      }
+      
       // Set the family tree data
       const familyTreeData = response.data.data;
       setFamilyTree(familyTreeData);
       
-      // Extract members directly from the family tree data
-      if (familyTreeData && familyTreeData.members) {
+      // Extract members from the family tree data
+      // Check for members in both 'members' and 'children' arrays
+      let membersArray = [];
+      
+      if (familyTreeData && familyTreeData.members && familyTreeData.members.length > 0) {
         console.log('Extracting members from family tree data:', familyTreeData.members.length);
-        
-        // Format the members data
-        const formattedMembers = familyTreeData.members.map(member => ({
-          id: member._id,
-          name: `${member.firstName || ''} ${member.lastName || ''}`.trim(),
-          firstName: member.firstName,
-          lastName: member.lastName,
-          gender: member.gender,
-          birthDate: member.birthDate,
-          deathDate: member.deathDate,
-          isAlive: member.isAlive,
-          relationshipType: member.relationshipType,
-          parentId: member.parents && member.parents.length > 0 ? member.parents[0] : null,
-          spouses: member.partners || [],
-          children: member.children || [],
-          location: member.location,
-          occupation: member.occupation,
-          bio: member.bio || member.notes,
-          photoURL: member.photoURL || member.profilePicture,
-          contactInfo: member.contactInfo
-        }));
-        
-        setFamilyMembers(formattedMembers);
+        membersArray = familyTreeData.members;
+      } else if (familyTreeData && familyTreeData.children && familyTreeData.children.length > 0) {
+        // Handle case where members are in the 'children' array instead of 'members'
+        console.log('Extracting members from children array:', familyTreeData.children.length);
+        membersArray = familyTreeData.children;
       } else {
-        console.log('No members found in family tree data');
+        console.log('No members or children found in family tree data');
         setFamilyMembers([]);
+        return;
       }
+      
+      // Format the members data
+      const formattedMembers = membersArray.map(member => ({
+        id: member._id,
+        name: `${member.firstName || ''} ${member.lastName || ''}`.trim(),
+        firstName: member.firstName,
+        lastName: member.lastName,
+        gender: member.gender,
+        birthDate: member.birthDate,
+        dateOfBirth: member.birthDate,
+        deathDate: member.deathDate,
+        dateOfDeath: member.deathDate,
+        isAlive: member.isAlive,
+        relationshipType: member.relationshipType,
+        parentId: member.parents && member.parents.length > 0 ? member.parents[0] : null,
+        parents: member.parents || [],
+        spouses: member.partners || [],
+        partners: member.partners || [],
+        children: member.children || [],
+        location: member.location,
+        occupation: member.occupation,
+        bio: member.bio || member.notes,
+        notes: member.notes || member.bio,
+        photoURL: member.photoURL || member.profilePicture,
+        profilePicture: member.profilePicture || member.photoURL,
+        contactInfo: member.contactInfo
+      }));
+      
+      console.log('Formatted members:', formattedMembers);
+      setFamilyMembers(formattedMembers);
     } catch (err) {
       console.error('Error fetching family tree:', err);
       setError('Failed to fetch family tree. Please try again later.');
+      setFamilyTree(null);
+      setFamilyMembers([]);
+      setTreeData(null);
     } finally {
       setLoading(false);
     }
@@ -366,16 +390,32 @@ export function FamilyProvider({ children }) {
 
   // Process family tree data for visualization
   useEffect(() => {
-    if (familyTree && familyMembers.length > 0) {
+    if (familyTree && familyMembers) {
       console.log('Processing family tree data for visualization');
       console.log('Family tree:', familyTree);
       console.log('Family members:', familyMembers);
       
       try {
+        // Check if we have any members to process
+        if (familyMembers.length === 0) {
+          console.log('No family members to process');
+          setTreeData(null);
+          return;
+        }
+        
+        // Log the number of members for debugging
+        console.log(`Processing ${familyMembers.length} family members for visualization`);
+        
         // Build hierarchical tree structure for visualization
         const processedData = buildFamilyTree(familyMembers);
         console.log('Processed tree data:', processedData);
-        setTreeData(processedData);
+        
+        if (processedData) {
+          setTreeData(processedData);
+        } else {
+          console.log('No processed data returned from buildFamilyTree');
+          setTreeData(null);
+        }
       } catch (error) {
         console.error('Error processing family tree data:', error);
         setTreeData(null);

@@ -444,9 +444,12 @@ const FamilyTreeVisualization = ({ treeData, onNodeClick, onAddChild, onEditNode
   // Process tree data to apply collapsed state
   useEffect(() => {
     if (!treeData) {
+      console.log('No tree data provided to FamilyTreeVisualization');
       setProcessedTreeData(null);
       return;
     }
+    
+    console.log('Processing tree data for visualization:', treeData);
     
     // Deep clone the tree data to avoid modifying the original
     const processNode = (node) => {
@@ -489,21 +492,9 @@ const FamilyTreeVisualization = ({ treeData, onNodeClick, onAddChild, onEditNode
       setProcessedTreeData(processed);
     } catch (error) {
       console.error('Error processing tree data:', error);
+      setProcessedTreeData(null);
     }
   }, [treeData, collapsedNodes]);
-  
-  // Toggle node collapse state
-  const toggleNode = (nodeId) => {
-    console.log('Toggling node:', nodeId);
-    setCollapsedNodes(prev => {
-      const newState = {
-        ...prev,
-        [nodeId]: !prev[nodeId]
-      };
-      console.log('New collapsed state:', newState);
-      return newState;
-    });
-  };
   
   // Update dimensions when the container is resized
   useEffect(() => {
@@ -513,8 +504,8 @@ const FamilyTreeVisualization = ({ treeData, onNodeClick, onAddChild, onEditNode
           const { width, height } = entry.contentRect;
           setDimensions({ width, height });
           
-          // Only set translate on initial render
-          if (initialRender) {
+          // Only set translate on initial render or when tree data changes
+          if (initialRender || !processedTreeData) {
             setTranslate({ x: width / 2, y: height / 5 });
             setInitialRender(false);
           }
@@ -529,7 +520,20 @@ const FamilyTreeVisualization = ({ treeData, onNodeClick, onAddChild, onEditNode
         }
       };
     }
-  }, [initialRender]);
+  }, [initialRender, processedTreeData]);
+  
+  // Toggle node collapse state
+  const toggleNode = (nodeId) => {
+    console.log('Toggling node:', nodeId);
+    setCollapsedNodes(prev => {
+      const newState = {
+        ...prev,
+        [nodeId]: !prev[nodeId]
+      };
+      console.log('New collapsed state:', newState);
+      return newState;
+    });
+  };
   
   // Handle node click
   const handleNodeClick = (nodeDatum) => {
@@ -660,21 +664,25 @@ const FamilyTreeVisualization = ({ treeData, onNodeClick, onAddChild, onEditNode
           <div className="text-center p-8 max-w-md">
             <div className="text-5xl mb-4">🌱</div>
             <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">
-              No Family Tree Data
+              {treeData ? 'Processing Tree Data...' : 'No Family Tree Data'}
             </h3>
             <p className="text-gray-600 dark:text-gray-400 mb-6">
-              Start by adding your first family member to begin building your family tree.
+              {treeData ? 
+                'Please wait while we prepare your family tree visualization.' : 
+                'Start by adding your first family member to begin building your family tree.'}
             </p>
-            <button
-              onClick={() => {
-                if (onAddChild) {
-                  onAddChild({ id: null, name: 'Root' });
-                }
-              }}
-              className="px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white rounded-lg transition-colors"
-            >
-              Add First Member
-            </button>
+            {!treeData && (
+              <button
+                onClick={() => {
+                  if (onAddChild) {
+                    onAddChild({ id: null, name: 'Root' });
+                  }
+                }}
+                className="px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white rounded-lg transition-colors"
+              >
+                Add First Member
+              </button>
+            )}
           </div>
         </div>
       )}

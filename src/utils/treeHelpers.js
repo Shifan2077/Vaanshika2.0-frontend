@@ -15,6 +15,15 @@ export const buildFamilyTree = (members, rootId = null) => {
     return null;
   }
   
+  // Special case: If there's only one member, it's the root
+  if (members.length === 1) {
+    console.log('Only one member found, treating as root:', members[0]);
+    const singleMember = members[0];
+    
+    // Format the single member for visualization
+    return formatSingleMember(singleMember);
+  }
+  
   // Create a map of members by ID for quick lookup
   const membersMap = {};
   members.forEach(member => {
@@ -248,53 +257,36 @@ export const buildFamilyTree = (members, rootId = null) => {
               familyUnits[parentFamilyUnitId].children.push(childId);
               console.log(`Added child ${childId} to parent's family unit ${parentFamilyUnitId}`);
             }
-          } 
-          // Otherwise add directly to parent's children array
-          else if (!isInFamilyUnit) {
-            if (!membersMap[memberId].children.includes(childId)) {
-              membersMap[memberId].children.push(childId);
-              console.log(`Added child ${childId} directly to parent ${memberId}`);
-            }
           }
         }
       });
     }
   });
   
-  // Find the root member(s)
+  // Find root members (those without parents or with parents not in the members list)
   let rootMembers = [];
-  if (rootId) {
-    // If rootId is provided, use that as the root
-    if (membersMap[rootId]) {
-      rootMembers = [membersMap[rootId]];
-    }
+  
+  // If a specific root ID is provided, use that
+  if (rootId && membersMap[rootId]) {
+    console.log(`Using specified root member: ${rootId}`);
+    rootMembers = [membersMap[rootId]];
   } else {
-    // Otherwise, find members without parents
-    rootMembers = members
-      .filter(member => {
-        const memberId = member.id || member._id;
-        // Check for parentId in various formats
-        const parentId = member.parentId || (member.parent && member.parent._id);
-        // Check if this member is a child in any family unit
-        const isChildInAnyFamilyUnit = Object.values(familyUnits).some(unit => 
-          unit.children.includes(memberId)
-        );
-        
-        return !parentId && !isChildInAnyFamilyUnit;
-      })
-      .map(member => {
-        const memberId = member.id || member._id;
-        
-        // Check if this member is part of a family unit
-        for (const unitId in familyUnits) {
-          if (familyUnits[unitId].spouses.includes(memberId)) {
-            // Return the family unit instead of the individual member
-            return createFamilyUnitNode(familyUnits[unitId], membersMap);
-          }
+    // Find members without parents
+    rootMembers = Object.values(membersMap).filter(member => {
+      // Check if member has no parent or parent is not in our members list
+      const hasNoParent = !member.parentId || !membersMap[member.parentId];
+      
+      // Check if member is not a child in any family unit
+      let isNotChildInFamilyUnit = true;
+      for (const unitId in familyUnits) {
+        if (familyUnits[unitId].children.includes(member.id)) {
+          isNotChildInFamilyUnit = false;
+          break;
         }
-        
-        return membersMap[memberId];
-      });
+      }
+      
+      return hasNoParent && isNotChildInFamilyUnit;
+    });
   }
   
   console.log('Root members found:', rootMembers.length);
@@ -305,34 +297,90 @@ export const buildFamilyTree = (members, rootId = null) => {
     const firstMemberId = members[0].id || members[0]._id;
     
     // Check if first member is part of a family unit
+    let foundInFamilyUnit = false;
     for (const unitId in familyUnits) {
       if (familyUnits[unitId].spouses.includes(firstMemberId)) {
         rootMembers = [createFamilyUnitNode(familyUnits[unitId], membersMap)];
+        foundInFamilyUnit = true;
         break;
       }
     }
     
     // If not in a family unit, use the member directly
-    if (rootMembers.length === 0) {
+    if (!foundInFamilyUnit) {
       rootMembers = [membersMap[firstMemberId]];
     }
   }
 
+  // Convert family units to nodes and add them to root members if they contain root members
+  for (const unitId in familyUnits) {
+    const unit = familyUnits[unitId];
+    let containsRootMember = false;
+    
+    // Check if any spouse in this unit is a root member
+    for (const spouseId of unit.spouses) {
+      if (rootMembers.some(member => member.id === spouseId)) {
+        containsRootMember = true;
+        // Remove the individual root member as they'll be part of the family unit
+        rootMembers = rootMembers.filter(member => member.id !== spouseId);
+      }
+    }
+    
+    if (containsRootMember) {
+      // Add the family unit as a root node
+      rootMembers.push(createFamilyUnitNode(unit, membersMap));
+    }
+  }
+
   // Build the tree by connecting children to parents or family units
+  const processedNodes = new Set();
+  
+  // Process family units first
   Object.values(familyUnits).forEach(unit => {
     // For each child in the family unit
     unit.children.forEach(childId => {
       if (membersMap[childId]) {
-        // Find the family unit node
+        // Find the family unit node in root members
         const familyUnitNode = findFamilyUnitNode(rootMembers, unit.id);
         if (familyUnitNode) {
+          // Initialize children array if it doesn't exist
+          if (!familyUnitNode.children) {
+            familyUnitNode.children = [];
+          }
+          
           // Add the child to the family unit's children
-          familyUnitNode.children.push(membersMap[childId]);
+          if (!familyUnitNode.children.some(child => child.id === childId)) {
+            familyUnitNode.children.push(membersMap[childId]);
+            processedNodes.add(childId);
+          }
         }
       }
     });
   });
   
+  // Process individual members
+  Object.values(membersMap).forEach(member => {
+    if (member.children && member.children.length > 0) {
+      member.children.forEach(childId => {
+        // Skip if already processed or not in members map
+        if (processedNodes.has(childId) || !membersMap[childId]) {
+          return;
+        }
+        
+        // Initialize children array if it doesn't exist
+        if (!member.children) {
+          member.children = [];
+        }
+        
+        // Add child to parent's children array
+        if (!member.children.some(child => child.id === childId)) {
+          member.children.push(membersMap[childId]);
+          processedNodes.add(childId);
+        }
+      });
+    }
+  });
+
   // Format the tree for visualization
   const formatNode = (node) => {
     // Handle family unit nodes differently
@@ -362,11 +410,12 @@ export const buildFamilyTree = (members, rootId = null) => {
             };
           }).filter(Boolean)
         },
-        children: node.children.map(childId => {
-          // Convert child ID to actual child node
-          const childNode = membersMap[childId];
-          return childNode ? formatNode(childNode) : null;
-        }).filter(Boolean)
+        children: node.children && node.children.length > 0 ? 
+          node.children.map(child => {
+            // Check if child is an ID or an object
+            const childNode = typeof child === 'string' ? membersMap[child] : child;
+            return childNode ? formatNode(childNode) : null;
+          }).filter(Boolean) : []
       };
     }
     
@@ -398,23 +447,36 @@ export const buildFamilyTree = (members, rootId = null) => {
         contactInfo: node.contactInfo || {},
         spouseId: node.spouseId,
         relationshipType: node.relationshipType,
-        // Include the original arrays for debugging
-        originalParents: node.parents || [],
-        originalChildren: node.children || [],
-        originalPartners: node.partners || node.spouses || []
       },
-      children: node.children.map(childId => {
-        // Convert child ID to actual child node
-        const childNode = membersMap[childId];
-        return childNode ? formatNode(childNode) : null;
-      }).filter(Boolean)
+      children: node.children && node.children.length > 0 ? 
+        node.children.map(child => {
+          // Check if child is an ID or an object
+          const childNode = typeof child === 'string' ? membersMap[child] : child;
+          return childNode ? formatNode(childNode) : null;
+        }).filter(Boolean) : []
     };
   };
-
-  // Return the formatted tree
-  const result = rootMembers.length > 0 ? formatNode(rootMembers[0]) : null;
-  console.log('Final tree structure:', result);
-  return result;
+  
+  // If we have multiple root members, create a virtual root
+  let formattedTree;
+  if (rootMembers.length > 1) {
+    formattedTree = {
+      id: 'virtual_root',
+      name: 'Family',
+      attributes: {
+        virtual: true
+      },
+      children: rootMembers.map(node => formatNode(node)).filter(Boolean)
+    };
+  } else if (rootMembers.length === 1) {
+    formattedTree = formatNode(rootMembers[0]);
+  } else {
+    console.log('No root members found, returning null');
+    return null;
+  }
+  
+  console.log('Formatted tree:', formattedTree);
+  return formattedTree;
 };
 
 /**
@@ -428,8 +490,8 @@ const createFamilyUnitNode = (unit, membersMap) => {
     id: unit.id,
     name: unit.name,
     type: 'familyUnit',
-    spouses: unit.spouses.map(spouseId => membersMap[spouseId]),
-    children: unit.children.map(childId => membersMap[childId])
+    spouses: unit.spouses,
+    children: unit.children.map(childId => membersMap[childId]).filter(Boolean)
   };
 };
 
@@ -441,13 +503,16 @@ const createFamilyUnitNode = (unit, membersMap) => {
  */
 const findFamilyUnitNode = (nodes, unitId) => {
   for (const node of nodes) {
-    if (node.type === 'familyUnit' && node.id === unitId) {
+    if (node.id === unitId) {
       return node;
     }
     
+    // Check children recursively
     if (node.children && node.children.length > 0) {
       const found = findFamilyUnitNode(node.children, unitId);
-      if (found) return found;
+      if (found) {
+        return found;
+      }
     }
   }
   
@@ -539,6 +604,45 @@ export const calculateRelationship = (tree, member1Id, member2Id) => {
   } else {
     return `Related (${distance1} steps up, ${distance2} steps down)`;
   }
+};
+
+/**
+ * Format a single member for visualization (used when there's only one member in the tree)
+ * @param {Object} member - The member to format
+ * @returns {Object} - Formatted member for visualization
+ */
+const formatSingleMember = (member) => {
+  // Extract first and last name from the name field if needed
+  let firstName = member.firstName || '';
+  let lastName = member.lastName || '';
+  
+  if (!firstName && !lastName && member.name) {
+    const nameParts = member.name.split(' ');
+    firstName = nameParts[0] || '';
+    lastName = nameParts.slice(1).join(' ') || '';
+  }
+  
+  // Format the node for visualization
+  return {
+    id: member.id || member._id,
+    name: member.name || `${firstName} ${lastName}`.trim(),
+    attributes: {
+      firstName,
+      lastName,
+      gender: member.gender,
+      dateOfBirth: member.birthDate || member.dateOfBirth,
+      dateOfDeath: member.deathDate || member.dateOfDeath,
+      isAlive: member.isAlive !== undefined ? member.isAlive : true,
+      location: member.location,
+      occupation: member.occupation,
+      bio: member.bio || member.notes,
+      photoURL: member.photoURL || member.profilePicture,
+      contactInfo: member.contactInfo || {},
+      spouseId: member.spouseId,
+      relationshipType: member.relationshipType,
+    },
+    children: []
+  };
 };
 
 export default {
